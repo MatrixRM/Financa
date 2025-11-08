@@ -341,8 +341,13 @@ function addMessage(text, sender, data = null) {
             }
         }
         
+        // Garantir que type existe antes de usar
+        const tipoTransacao = trans.type || 'despesa';
+        const iconeTransacao = tipoTransacao === 'despesa' ? '💸' : '💰';
+        const tipoTexto = tipoTransacao.toUpperCase();
+        
         preview.innerHTML = `
-            <strong>${trans.type === 'despesa' ? '💸' : '💰'} ${trans.type.toUpperCase()}</strong><br>
+            <strong>${iconeTransacao} ${tipoTexto}</strong><br>
             Valor: R$ ${trans.amount?.toFixed(2) || '?'}<br>
             ${trans.category ? `Categoria: ${trans.category}<br>` : ''}
             ${trans.account ? `Conta: ${trans.account}<br>` : ''}
