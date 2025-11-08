@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
@@ -141,17 +142,22 @@ class OpenAIClient:
         },
     }
 
-    _SYSTEM_PROMPT = (
-        "Você é um assistente financeiro em português. "
-        "Sua missão é interpretar mensagens livres de usuários sobre finanças pessoais, "
-        "identificar se o texto descreve um NOVO LANÇAMENTO (gasto ou receita) ou um PEDIDO DE RELATÓRIO. "
-        "Responda SEMPRE em JSON seguindo o schema fornecido. "
-        "Quando o usuário informar um gasto, defina 'type' como 'despesa'. Para ganhos, utilize 'receita'. "
-        "Use valores positivos e tente inferir a categoria e a conta com base na descrição. "
-        "Quando a data não for informada, utilize a data atual do usuário. "
-        "Se houver dúvida relevante (valor, categoria, data), marque 'clarification_needed' como true e peça os dados faltantes na resposta. "
-        "Para pedidos de relatório, preencha o objeto 'query' com o tipo adequado e período, se possível."
-    )
+    def _get_system_prompt(self) -> str:
+        """Retorna o prompt do sistema com a data atual."""
+        hoje = datetime.now().strftime("%d/%m/%Y")
+        return (
+            f"Você é um assistente financeiro em português. A data de hoje é {hoje}. "
+            "Sua missão é interpretar mensagens livres de usuários sobre finanças pessoais, "
+            "identificar se o texto descreve um NOVO LANÇAMENTO (gasto ou receita) ou um PEDIDO DE RELATÓRIO. "
+            "Responda SEMPRE em JSON seguindo o schema fornecido. "
+            "Quando o usuário informar um gasto, defina 'type' como 'despesa'. Para ganhos, utilize 'receita'. "
+            "Use valores positivos e tente inferir a categoria e a conta com base na descrição. "
+            f"Quando a data não for informada, utilize SEMPRE a data de HOJE ({hoje}). "
+            "Se o usuário disser 'hoje', 'agora', ou não mencionar data, use a data atual. "
+            "Se disser 'ontem', use o dia anterior. Para 'amanhã', use o dia seguinte. "
+            "Se houver dúvida relevante (valor, categoria, data), marque 'clarification_needed' como true e peça os dados faltantes na resposta. "
+            "Para pedidos de relatório, preencha o objeto 'query' com o tipo adequado e período, se possível."
+        )
 
     def __init__(self) -> None:
         if not settings.OPENAI_API_KEY:
@@ -216,7 +222,7 @@ class OpenAIClient:
         input_messages: List[Dict[str, Any]] = [
             {
                 "role": "system",
-                "content": self._SYSTEM_PROMPT,
+                "content": self._get_system_prompt(),
             }
         ]
 
