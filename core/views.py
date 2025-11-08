@@ -1284,6 +1284,11 @@ def chat_message_view(request):
             message=message_text,
             context=context
         )
+        
+        # Log detalhado da resposta da IA
+        logger_chat.info(f"Resposta da IA - Intent: {parsed_response.get('intent')}")
+        logger_chat.info(f"Resposta da IA - Clarification: {parsed_response.get('clarification_needed')}")
+        logger_chat.info(f"Resposta da IA - Transaction: {parsed_response.get('transaction')}")
 
         # Adiciona o texto transcrito na resposta se houver
         if transcribed_text:
@@ -1295,7 +1300,15 @@ def chat_message_view(request):
 
         if intent == 'create_transaction':
             transaction_data = parsed_response.get('transaction')
-            if transaction_data and request.user.is_authenticated:
+            
+            # Validar se tem dados mínimos necessários
+            has_required_data = (
+                transaction_data and
+                transaction_data.get('amount') and
+                transaction_data.get('amount') > 0
+            )
+            
+            if has_required_data and request.user.is_authenticated:
                 try:
                     # Verificar se há um transaction_id no contexto (para edição)
                     pending_transaction_id = request.data.get('pending_transaction_id')
@@ -1329,6 +1342,16 @@ def chat_message_view(request):
                     logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
                     parsed_response['transaction_saved'] = False
                     parsed_response['save_error'] = str(e)
+            else:
+                # Não há dados suficientes para criar a transação
+                if not has_required_data:
+                    logger_chat.warning(f"Dados insuficientes para criar transação: {transaction_data}")
+                    parsed_response['transaction_saved'] = False
+                    if not needs_clarification:
+                        # Forçar clarification se não foi detectado pela IA
+                        parsed_response['clarification_needed'] = True
+                        if 'assistant_message' in parsed_response and 'valor' not in parsed_response['assistant_message'].lower():
+                            parsed_response['assistant_message'] += "\n\nPor favor, me diga o valor da transação."
         
         # Se a intenção for editar transação existente
         elif intent == 'edit_transaction':
