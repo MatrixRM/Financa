@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
@@ -144,7 +145,9 @@ class OpenAIClient:
 
     def _get_system_prompt(self) -> str:
         """Retorna o prompt do sistema com a data atual."""
-        hoje = datetime.now().strftime("%d/%m/%Y")
+        # Usar timezone brasileiro para garantir data correta
+        tz_br = ZoneInfo('America/Sao_Paulo')
+        hoje = datetime.now(tz_br).strftime("%d/%m/%Y")
         return (
             f"Você é um assistente financeiro em português. A data de hoje é {hoje}. "
             "Sua missão é interpretar mensagens livres de usuários sobre finanças pessoais, "
