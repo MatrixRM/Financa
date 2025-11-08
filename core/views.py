@@ -1325,7 +1325,22 @@ def chat_message_view(request):
                 if saved_transactions:
                     parsed_response['transaction_saved'] = True
                     parsed_response['transaction_ids'] = [t.id for t in saved_transactions]
-                    parsed_response['assistant_message'] = f"✅ {len(saved_transactions)} transações registradas com sucesso!"
+                    
+                    # Criar lista formatada das transações
+                    trans_list = "\n".join([
+                        f"  {i+1}. {t.titulo} - R$ {t.valor:.2f} ({t.categoria.nome})"
+                        for i, t in enumerate(saved_transactions)
+                    ])
+                    
+                    total = sum(t.valor for t in saved_transactions)
+                    tipo = "despesas" if saved_transactions[0].tipo == "despesa" else "receitas"
+                    icone = "💸" if saved_transactions[0].tipo == "despesa" else "💰"
+                    
+                    parsed_response['assistant_message'] = (
+                        f"✅ {len(saved_transactions)} {tipo} registradas com sucesso!\n\n"
+                        f"{trans_list}\n\n"
+                        f"{icone} Total: R$ {total:.2f}"
+                    )
                 else:
                     parsed_response['transaction_saved'] = False
                     
@@ -1377,13 +1392,30 @@ def chat_message_view(request):
                     if not needs_clarification:
                         # Forçar clarification se não foi detectado pela IA
                         parsed_response['clarification_needed'] = True
-                        if 'assistant_message' in parsed_response and 'valor' not in parsed_response['assistant_message'].lower():
-                            parsed_response['assistant_message'] += "\n\nPor favor, me diga o valor da transação."
+                        
+                        # Verificar o que está faltando
+                        missing = []
+                        if not transaction_data.get('amount'):
+                            missing.append("o valor")
+                        if not transaction_data.get('title') and not transaction_data.get('category'):
+                            missing.append("a descrição ou categoria")
+                        
+                        if missing:
+                            missing_text = " e ".join(missing)
+                            parsed_response['assistant_message'] = (
+                                f"⚠️ Para registrar a transação, preciso saber {missing_text}.\n\n"
+                                f"💡 Exemplo: 'Gastei 50 reais no mercado'"
+                            )
+                        elif 'assistant_message' in parsed_response and 'valor' not in parsed_response['assistant_message'].lower():
+                            parsed_response['assistant_message'] += "\n\n💡 Por favor, me diga o valor da transação."
         
         # Se a intenção for editar transação existente
         elif intent == 'edit_transaction':
             search_criteria = parsed_response.get('search_criteria', {})
             transaction_data = parsed_response.get('transaction', {})
+            
+            logger_chat.info(f"🔍 EDIÇÃO - Critérios de busca: {search_criteria}")
+            logger_chat.info(f"🔍 EDIÇÃO - Dados da transação: {transaction_data}")
             
             if request.user.is_authenticated and not needs_clarification:
                 try:
@@ -1393,24 +1425,64 @@ def chat_message_view(request):
                         criteria=search_criteria
                     )
                     
+                    logger_chat.info(f"🔍 EDIÇÃO - Transações encontradas: {len(found_transactions)}")
+                    if len(found_transactions) > 0:
+                        logger_chat.info(f"🔍 EDIÇÃO - Primeira transação: {found_transactions[0].titulo} - R$ {found_transactions[0].valor} - {found_transactions[0].data}")
+                    
                     if len(found_transactions) == 0:
-                        parsed_response['assistant_message'] = "Não encontrei nenhuma transação com esses critérios. Pode tentar com outras informações?"
+                        parsed_response['assistant_message'] = (
+                            "🔍 Não encontrei nenhuma transação com essas características.\n\n"
+                            "💡 Dica: Tente mencionar:\n"
+                            "• A data exata (ex: 'dia 08/11')\n"
+                            "• O valor aproximado (ex: 'de R$ 250')\n"
+                            "• A categoria ou descrição (ex: 'mercado', 'gasolina')\n"
+                            "• A conta usada (ex: 'cartão de crédito', 'conta corrente')"
+                        )
                         parsed_response['clarification_needed'] = True
                     elif len(found_transactions) == 1:
                         # Atualizar a transação encontrada
+                        old_transaction = found_transactions[0]
                         saved_transaction = update_chat_transaction(
-                            transaction_id=found_transactions[0].id,
+                            transaction_id=old_transaction.id,
                             user=request.user,
                             transaction_data=transaction_data,
                             original_message=message_text
                         )
                         parsed_response['transaction_id'] = saved_transaction.id
                         parsed_response['transaction_saved'] = True
-                        parsed_response['assistant_message'] = f"✅ Transação atualizada com sucesso!\n\n" + format_transaction_preview(saved_transaction)
+                        
+                        # Mostrar o que foi alterado
+                        changes = []
+                        if transaction_data.get('amount') and old_transaction.valor != transaction_data['amount']:
+                            changes.append(f"Valor: R$ {old_transaction.valor:.2f} → R$ {saved_transaction.valor:.2f}")
+                        if transaction_data.get('title') and old_transaction.titulo != transaction_data['title']:
+                            changes.append(f"Descrição: {old_transaction.titulo} → {saved_transaction.titulo}")
+                        if transaction_data.get('date') and str(old_transaction.data) != transaction_data['date']:
+                            changes.append(f"Data: {old_transaction.data.strftime('%d/%m/%Y')} → {saved_transaction.data.strftime('%d/%m/%Y')}")
+                        
+                        changes_text = "\n".join([f"  • {c}" for c in changes]) if changes else "  • Dados atualizados"
+                        
+                        parsed_response['assistant_message'] = (
+                            f"✅ Transação atualizada com sucesso!\n\n"
+                            f"📝 Alterações:\n{changes_text}\n\n"
+                            f"{format_transaction_preview(saved_transaction)}"
+                        )
                     else:
                         # Múltiplas transações encontradas
-                        trans_list = "\n".join([f"• {t.data.strftime('%d/%m')} - {t.categoria.nome} - R$ {t.valor:.2f}" for t in found_transactions[:5]])
-                        parsed_response['assistant_message'] = f"Encontrei {len(found_transactions)} transações com esses critérios:\n\n{trans_list}\n\nPor favor, seja mais específico (mencione a data exata, por exemplo)."
+                        trans_list = "\n".join([
+                            f"  {i+1}. {t.data.strftime('%d/%m/%Y')} - {t.titulo} - R$ {t.valor:.2f} ({t.conta.nome})"
+                            for i, t in enumerate(found_transactions[:5])
+                        ])
+                        
+                        mais = f"\n  ... e mais {len(found_transactions) - 5} transações" if len(found_transactions) > 5 else ""
+                        
+                        parsed_response['assistant_message'] = (
+                            f"🔍 Encontrei {len(found_transactions)} transações:\n\n"
+                            f"{trans_list}{mais}\n\n"
+                            f"💡 Para editar, seja mais específico mencionando:\n"
+                            f"• A data exata (ex: 'a transação do dia 08/11')\n"
+                            f"• O valor exato (ex: 'a de R$ {found_transactions[0].valor:.2f}')"
+                        )
                         parsed_response['clarification_needed'] = True
                         
                 except Exception as e:
