@@ -992,7 +992,9 @@ def save_chat_transaction(user, transaction_data, original_message):
     )
     
     # Processar data - SEMPRE usar a data atual no timezone correto (Brasil)
-    data_transacao = timezone.now().date()
+    from zoneinfo import ZoneInfo
+    tz_br = ZoneInfo('America/Sao_Paulo')
+    data_transacao = timezone.now().astimezone(tz_br).date()
     logger.info(f"Data da transação definida como data atual (timezone BR): {data_transacao}")
     
     # Criar a transação
