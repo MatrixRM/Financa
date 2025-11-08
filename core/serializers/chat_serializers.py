@@ -21,6 +21,11 @@ class ChatMessageSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Histórico de conversa para manter contexto"
     )
+    pending_transaction_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID da transação pendente de complemento/edição"
+    )
 
     def validate_context(self, value):
         """Garante que context seja uma lista."""
@@ -67,4 +72,17 @@ class ChatResponseSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         help_text="Texto transcrito do áudio enviado"
+    )
+    transaction_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID da transação criada/atualizada"
+    )
+    transaction_saved = serializers.BooleanField(
+        required=False,
+        help_text="Indica se a transação foi salva com sucesso"
+    )
+    transaction_pending = serializers.BooleanField(
+        required=False,
+        help_text="Indica se a transação está pendente de mais informações"
     )

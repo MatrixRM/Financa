@@ -1028,6 +1028,72 @@ def save_chat_transaction(user, transaction_data, original_message):
     return transacao
 
 
+def update_chat_transaction(transaction_id, user, transaction_data, original_message):
+    """Atualiza uma transação existente criada via chat."""
+    from datetime import datetime as dt_datetime
+    from decimal import Decimal
+    from zoneinfo import ZoneInfo
+    
+    try:
+        # Buscar a transação
+        transacao = Transacao.objects.get(id=transaction_id, casa=user.casa)
+    except Transacao.DoesNotExist:
+        raise ValueError(f"Transação {transaction_id} não encontrada")
+    
+    # Atualizar campos se fornecidos
+    if 'amount' in transaction_data and transaction_data['amount']:
+        transacao.valor = Decimal(str(transaction_data['amount']))
+    
+    if 'title' in transaction_data and transaction_data['title']:
+        transacao.titulo = transaction_data['title']
+    
+    if 'type' in transaction_data and transaction_data['type']:
+        transacao.tipo = transaction_data['type']
+    
+    # Atualizar categoria se fornecida
+    if 'category' in transaction_data and transaction_data['category']:
+        category_name = transaction_data['category']
+        tipo_categoria = transacao.tipo  # Usar o tipo atual da transação
+        categoria, _ = Categoria.objects.get_or_create(
+            casa=user.casa,
+            nome=category_name,
+            defaults={'tipo': tipo_categoria, 'cor': '#6c757d', 'icone': '💰', 'ativa': True}
+        )
+        transacao.categoria = categoria
+    
+    # Atualizar conta se fornecida
+    if 'account' in transaction_data and transaction_data['account']:
+        account_name = transaction_data['account']
+        conta, _ = Conta.objects.get_or_create(
+            casa=user.casa,
+            nome=account_name,
+            defaults={'tipo': 'corrente', 'saldo_inicial': Decimal('0.00'), 'ativa': True}
+        )
+        transacao.conta = conta
+    
+    # Atualizar data se fornecida
+    if 'date' in transaction_data and transaction_data['date']:
+        date_str = transaction_data['date']
+        try:
+            data_transacao = dt_datetime.fromisoformat(date_str).date()
+            transacao.data = data_transacao
+            logger.info(f"Data atualizada: {data_transacao}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Erro ao converter data '{date_str}': {e}")
+    
+    # Atualizar observação
+    if 'notes' in transaction_data and transaction_data['notes']:
+        transacao.observacao = transaction_data['notes']
+    else:
+        # Adicionar nota de edição
+        transacao.observacao = f"{transacao.observacao}\nEditado via chat: {original_message}"
+    
+    transacao.save()
+    logger.info(f"Transação {transaction_id} atualizada com sucesso")
+    
+    return transacao
+
+
 def save_chat_history(user, user_message, assistant_response, intent, transcribed_text=None):
     """Salva o histórico de conversação do chat."""
     from core.models import ChatHistory
@@ -1110,25 +1176,44 @@ def chat_message_view(request):
         if transcribed_text:
             parsed_response['transcribed_text'] = transcribed_text
 
-        # Se a intenção for criar transação e não precisar de esclarecimento
+        # Se a intenção for criar transação
         intent = parsed_response.get('intent')
         needs_clarification = parsed_response.get('clarification_needed', False)
 
-        if intent == 'create_transaction' and not needs_clarification:
+        if intent == 'create_transaction':
             transaction_data = parsed_response.get('transaction')
             if transaction_data and request.user.is_authenticated:
                 try:
-                    # Salvar a transação no banco
-                    saved_transaction = save_chat_transaction(
-                        user=request.user,
-                        transaction_data=transaction_data,
-                        original_message=message_text
-                    )
-                    logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
+                    # Verificar se há um transaction_id no contexto (para edição)
+                    pending_transaction_id = request.data.get('pending_transaction_id')
+                    
+                    if pending_transaction_id:
+                        # Editar transação existente
+                        saved_transaction = update_chat_transaction(
+                            transaction_id=pending_transaction_id,
+                            user=request.user,
+                            transaction_data=transaction_data,
+                            original_message=message_text
+                        )
+                        logger_chat.info(f"Transação {saved_transaction.id} atualizada com sucesso")
+                    else:
+                        # Criar nova transação
+                        saved_transaction = save_chat_transaction(
+                            user=request.user,
+                            transaction_data=transaction_data,
+                            original_message=message_text
+                        )
+                        logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
+                    
                     parsed_response['transaction_id'] = saved_transaction.id
                     parsed_response['transaction_saved'] = True
+                    
+                    # Se precisar de esclarecimento, indicar que a transação está pendente
+                    if needs_clarification:
+                        parsed_response['transaction_pending'] = True
+                        
                 except Exception as e:
-                    logger_chat.error(f"Erro ao salvar transação: {e}")
+                    logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
                     parsed_response['transaction_saved'] = False
                     parsed_response['save_error'] = str(e)
 

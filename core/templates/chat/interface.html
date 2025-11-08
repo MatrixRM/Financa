@@ -294,6 +294,7 @@ const audioButton = document.getElementById('audio-button');
 let conversationContext = [];
 let mediaRecorder = null;
 let audioChunks = [];
+let pendingTransactionId = null;  // ID da transação pendente de complemento
 
 // Auto-resize textarea
 messageInput.addEventListener('input', function() {
@@ -407,19 +408,26 @@ chatForm.addEventListener('submit', async function(e) {
     try {
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
         
+        const requestBody = {
+            message: message,
+            context: conversationContext.slice(-10).map(ctx => ({
+                role: ctx.role,
+                content: ctx.content
+            }))
+        };
+        
+        // Se houver transação pendente, incluir o ID
+        if (pendingTransactionId) {
+            requestBody.pending_transaction_id = pendingTransactionId;
+        }
+        
         const response = await fetch('/chat/message/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({
-                message: message,
-                context: conversationContext.slice(-10).map(ctx => ({
-                    role: ctx.role,
-                    content: ctx.content
-                }))
-            })
+            body: JSON.stringify(requestBody)
         });
         
         removeTypingIndicator();
@@ -440,6 +448,16 @@ chatForm.addEventListener('submit', async function(e) {
             role: 'assistant',
             content: data.assistant_message
         });
+        
+        // Gerenciar transação pendente
+        if (data.transaction_pending) {
+            // Há uma transação que precisa de mais informações
+            pendingTransactionId = data.transaction_id;
+            console.log('Transação pendente de complemento:', pendingTransactionId);
+        } else if (data.transaction_saved) {
+            // Transação completa, limpar pendência
+            pendingTransactionId = null;
+        }
         
     } catch (error) {
         removeTypingIndicator();
