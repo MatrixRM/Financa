@@ -1489,6 +1489,149 @@ def chat_message_view(request):
                     logger_chat.error(f"Erro ao buscar/editar transação: {e}")
                     parsed_response['assistant_message'] = f"Erro ao processar edição: {str(e)}"
                     parsed_response['clarification_needed'] = True
+        
+        # Se a intenção for gerar relatório
+        elif intent == 'report_request':
+            query = parsed_response.get('query', {})
+            logger_chat.info(f"📊 RELATÓRIO - Query recebida: {query}")
+            
+            if request.user.is_authenticated and not needs_clarification:
+                try:
+                    from datetime import datetime as dt_datetime, timedelta
+                    from django.db.models import Sum, Count, Q
+                    
+                    # Extrair parâmetros do relatório
+                    period = query.get('period', 'month')  # day, week, month, year, custom
+                    start_date = query.get('start_date')
+                    end_date = query.get('end_date')
+                    category = query.get('category')
+                    transaction_type = query.get('type')  # despesa, receita
+                    
+                    # Definir período padrão
+                    hoje = dt_datetime.now().date()
+                    if period == 'day':
+                        inicio = hoje
+                        fim = hoje
+                    elif period == 'week':
+                        inicio = hoje - timedelta(days=hoje.weekday())
+                        fim = inicio + timedelta(days=6)
+                    elif period == 'month':
+                        inicio = hoje.replace(day=1)
+                        if hoje.month == 12:
+                            fim = hoje.replace(day=31)
+                        else:
+                            proximo_mes = hoje.replace(month=hoje.month + 1, day=1)
+                            fim = proximo_mes - timedelta(days=1)
+                    elif period == 'year':
+                        inicio = hoje.replace(month=1, day=1)
+                        fim = hoje.replace(month=12, day=31)
+                    elif period == 'custom' and start_date and end_date:
+                        try:
+                            inicio = dt_datetime.fromisoformat(start_date).date()
+                            fim = dt_datetime.fromisoformat(end_date).date()
+                        except:
+                            inicio = hoje.replace(day=1)
+                            fim = hoje
+                    else:
+                        inicio = hoje.replace(day=1)
+                        fim = hoje
+                    
+                    logger_chat.info(f"📊 RELATÓRIO - Período: {inicio} a {fim}")
+                    
+                    # Buscar transações
+                    queryset = Transacao.objects.filter(
+                        casa=request.user.casa,
+                        data__gte=inicio,
+                        data__lte=fim
+                    )
+                    
+                    if category:
+                        queryset = queryset.filter(categoria__nome__icontains=category)
+                    
+                    if transaction_type:
+                        queryset = queryset.filter(tipo=transaction_type)
+                    
+                    # Calcular totais
+                    despesas = queryset.filter(tipo='despesa').aggregate(
+                        total=Sum('valor'),
+                        count=Count('id')
+                    )
+                    receitas = queryset.filter(tipo='receita').aggregate(
+                        total=Sum('valor'),
+                        count=Count('id')
+                    )
+                    
+                    total_despesas = despesas['total'] or 0
+                    total_receitas = receitas['total'] or 0
+                    saldo = total_receitas - total_despesas
+                    
+                    # Totais por categoria
+                    despesas_por_cat = queryset.filter(tipo='despesa').values(
+                        'categoria__nome'
+                    ).annotate(
+                        total=Sum('valor'),
+                        count=Count('id')
+                    ).order_by('-total')[:5]
+                    
+                    receitas_por_cat = queryset.filter(tipo='receita').values(
+                        'categoria__nome'
+                    ).annotate(
+                        total=Sum('valor'),
+                        count=Count('id')
+                    ).order_by('-total')[:5]
+                    
+                    # Formatar relatório
+                    periodo_texto = f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+                    
+                    relatorio = [
+                        f"📊 **RELATÓRIO FINANCEIRO**",
+                        f"📅 Período: {periodo_texto}",
+                        "",
+                        "💰 **RESUMO GERAL**",
+                        f"• Receitas: R$ {total_receitas:,.2f} ({receitas['count']} transações)",
+                        f"• Despesas: R$ {total_despesas:,.2f} ({despesas['count']} transações)",
+                        f"• Saldo: R$ {saldo:,.2f}",
+                        ""
+                    ]
+                    
+                    if despesas_por_cat:
+                        relatorio.append("📉 **TOP 5 DESPESAS POR CATEGORIA**")
+                        for item in despesas_por_cat:
+                            cat_nome = item['categoria__nome'] or 'Sem categoria'
+                            relatorio.append(f"• {cat_nome}: R$ {item['total']:,.2f} ({item['count']} transações)")
+                        relatorio.append("")
+                    
+                    if receitas_por_cat:
+                        relatorio.append("📈 **TOP 5 RECEITAS POR CATEGORIA**")
+                        for item in receitas_por_cat:
+                            cat_nome = item['categoria__nome'] or 'Sem categoria'
+                            relatorio.append(f"• {cat_nome}: R$ {item['total']:,.2f} ({item['count']} transações)")
+                        relatorio.append("")
+                    
+                    # Adicionar análise
+                    if saldo > 0:
+                        relatorio.append(f"✅ Saldo positivo de R$ {saldo:,.2f}")
+                    elif saldo < 0:
+                        relatorio.append(f"⚠️ Saldo negativo de R$ {abs(saldo):,.2f}")
+                    else:
+                        relatorio.append("⚖️ Receitas e despesas equilibradas")
+                    
+                    if total_despesas > 0 and total_receitas > 0:
+                        percentual = (total_despesas / total_receitas) * 100
+                        relatorio.append(f"📊 Você gastou {percentual:.1f}% das suas receitas")
+                    
+                    parsed_response['assistant_message'] = "\n".join(relatorio)
+                    parsed_response['report_generated'] = True
+                    
+                    logger_chat.info(f"📊 RELATÓRIO - Gerado com sucesso")
+                    
+                except Exception as e:
+                    logger_chat.error(f"Erro ao gerar relatório: {e}")
+                    parsed_response['assistant_message'] = f"⚠️ Erro ao gerar relatório: {str(e)}"
+                    parsed_response['clarification_needed'] = True
+            else:
+                if needs_clarification:
+                    logger_chat.info("📊 RELATÓRIO - Aguardando esclarecimento")
 
         # Salvar histórico do chat
         if request.user.is_authenticated:

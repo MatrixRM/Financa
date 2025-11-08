@@ -4,6 +4,7 @@ Testes automatizados para o sistema de chat financeiro.
 import json
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
 from datetime import date
@@ -244,6 +245,61 @@ class ChatIntegrationTestCase(TestCase):
         data = response.json()
         self.assertIn('messages', data)
         self.assertEqual(len(data['messages']), 4)  # 2 mensagens x 2 (user + assistant)
+    
+    @patch('core.views.OpenAIClient')
+    def test_chat_gerar_relatorio(self, mock_openai):
+        """Teste: Gerar relatório via chat."""
+        # Criar transações para o relatório
+        despesa1 = Transacao.objects.create(
+            casa=self.casa,
+            pago_por=self.user,
+            tipo='despesa',
+            valor=100.00,
+            titulo='Supermercado',
+            categoria=self.categoria,
+            conta=self.conta,
+            data=timezone.now().date()
+        )
+        receita1 = Transacao.objects.create(
+            casa=self.casa,
+            pago_por=self.user,
+            tipo='receita',
+            valor=3000.00,
+            titulo='Salário',
+            categoria=self.categoria,
+            conta=self.conta,
+            data=timezone.now().date()
+        )
+        
+        # Mock da resposta da IA
+        mock_instance = mock_openai.return_value
+        mock_instance.parse_user_message.return_value = {
+            'intent': 'report_request',
+            'clarification_needed': False,
+            'assistant_message': 'Gerando relatório...',
+            'query': {
+                'period': 'month'
+            }
+        }
+        
+        response = self.client.post(
+            '/chat/message/',
+            data=json.dumps({
+                'message': 'Me mostre um relatório deste mês',
+                'context': []
+            }),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('assistant_message', data)
+        # Verificar se contém elementos do relatório
+        message = data['assistant_message']
+        self.assertIn('RELATÓRIO', message)
+        self.assertIn('Receitas', message)
+        self.assertIn('Despesas', message)
+        self.assertIn('Saldo', message)
 
 
 class ChatPromptTestCase(TestCase):
