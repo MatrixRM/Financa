@@ -1491,7 +1491,7 @@ def chat_message_view(request):
                     parsed_response['clarification_needed'] = True
         
         # Se a intenção for gerar relatório
-        elif intent == 'report_request':
+        elif intent == 'query_summary':
             query = parsed_response.get('query', {})
             logger_chat.info(f"📊 RELATÓRIO - Query recebida: {query}")
             
@@ -1501,40 +1501,37 @@ def chat_message_view(request):
                     from django.db.models import Sum, Count, Q
                     
                     # Extrair parâmetros do relatório
-                    period = query.get('period', 'month')  # day, week, month, year, custom
-                    start_date = query.get('start_date')
-                    end_date = query.get('end_date')
+                    # A IA retorna: {"summary_type": "month_total", "period": {"start_date": "...", "end_date": "..."}}
+                    period_obj = query.get('period', {})
+                    start_date = period_obj.get('start_date')
+                    end_date = period_obj.get('end_date')
                     category = query.get('category')
                     transaction_type = query.get('type')  # despesa, receita
                     
-                    # Definir período padrão
+                    # Definir período
                     hoje = dt_datetime.now().date()
-                    if period == 'day':
-                        inicio = hoje
-                        fim = hoje
-                    elif period == 'week':
-                        inicio = hoje - timedelta(days=hoje.weekday())
-                        fim = inicio + timedelta(days=6)
-                    elif period == 'month':
+                    
+                    # Se a IA forneceu datas, usar elas
+                    if start_date and end_date:
+                        try:
+                            inicio = dt_datetime.fromisoformat(start_date).date()
+                            fim = dt_datetime.fromisoformat(end_date).date()
+                        except:
+                            # Fallback para mês atual
+                            inicio = hoje.replace(day=1)
+                            if hoje.month == 12:
+                                fim = hoje.replace(day=31)
+                            else:
+                                proximo_mes = hoje.replace(month=hoje.month + 1, day=1)
+                                fim = proximo_mes - timedelta(days=1)
+                    else:
+                        # Fallback para mês atual
                         inicio = hoje.replace(day=1)
                         if hoje.month == 12:
                             fim = hoje.replace(day=31)
                         else:
                             proximo_mes = hoje.replace(month=hoje.month + 1, day=1)
                             fim = proximo_mes - timedelta(days=1)
-                    elif period == 'year':
-                        inicio = hoje.replace(month=1, day=1)
-                        fim = hoje.replace(month=12, day=31)
-                    elif period == 'custom' and start_date and end_date:
-                        try:
-                            inicio = dt_datetime.fromisoformat(start_date).date()
-                            fim = dt_datetime.fromisoformat(end_date).date()
-                        except:
-                            inicio = hoje.replace(day=1)
-                            fim = hoje
-                    else:
-                        inicio = hoje.replace(day=1)
-                        fim = hoje
                     
                     logger_chat.info(f"📊 RELATÓRIO - Período: {inicio} a {fim}")
                     

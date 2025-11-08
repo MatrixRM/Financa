@@ -274,11 +274,15 @@ class ChatIntegrationTestCase(TestCase):
         # Mock da resposta da IA
         mock_instance = mock_openai.return_value
         mock_instance.parse_user_message.return_value = {
-            'intent': 'report_request',
+            'intent': 'query_summary',
             'clarification_needed': False,
             'assistant_message': 'Gerando relatório...',
             'query': {
-                'period': 'month'
+                'summary_type': 'month_total',
+                'period': {
+                    'start_date': str(timezone.now().date().replace(day=1)),
+                    'end_date': str(timezone.now().date())
+                }
             }
         }
         
