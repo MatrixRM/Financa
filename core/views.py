@@ -7,6 +7,7 @@ from django.db.models import Sum, Q, Count
 from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
@@ -18,14 +19,23 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 
+# Django REST Framework imports
+from rest_framework import status as rest_status
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.response import Response
+
 from .models import Usuario, Casa, Conta, Categoria, Transacao
 from .forms import (
     RegistroForm, LoginForm, ContaForm, CategoriaForm,
     TransacaoForm, FiltroTransacaoForm
 )
+from core.serializers.chat_serializers import ChatMessageSerializer, ChatResponseSerializer
+from core.services.openai_client import OpenAIClient, OpenAIClientError
 
 # Configurar logger
 logger = logging.getLogger(__name__)
+logger_chat = logging.getLogger(__name__)
 
 
 # ===========================
@@ -1208,17 +1218,6 @@ def chat_history_view(request):
         'messages': messages,
         'count': len(messages)
     }, status=rest_status.HTTP_200_OK)
-
-
-from rest_framework import status as rest_status
-from rest_framework.decorators import api_view, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.response import Response
-from django.views.decorators.csrf import csrf_exempt
-from core.serializers.chat_serializers import ChatMessageSerializer, ChatResponseSerializer
-from core.services.openai_client import OpenAIClient, OpenAIClientError
-
-logger_chat = logging.getLogger(__name__)
 
 
 @csrf_exempt
