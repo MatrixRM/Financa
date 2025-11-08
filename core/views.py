@@ -991,31 +991,9 @@ def save_chat_transaction(user, transaction_data, original_message):
         defaults={'tipo': tipo_categoria, 'cor': '#6c757d', 'icone': '💰', 'ativa': True}
     )
     
-    # Processar data
-    date_str = transaction_data.get('date')
-    logger.info(f"Data recebida do chat: {date_str}")
-    if date_str:
-        try:
-            # Tentar vários formatos de data
-            for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
-                try:
-                    data_transacao = datetime.strptime(date_str, fmt).date()
-                    logger.info(f"Data parseada com sucesso ({fmt}): {data_transacao}")
-                    break
-                except ValueError:
-                    continue
-            else:
-                # Se nenhum formato funcionou, usar data atual
-                logger.warning(f"Formato de data não reconhecido: {date_str}, usando data atual")
-                data_transacao = datetime.now().date()
-        except Exception as e:
-            logger.error(f"Erro ao processar data: {e}")
-            data_transacao = datetime.now().date()
-    else:
-        logger.info("Nenhuma data fornecida, usando data atual")
-        data_transacao = datetime.now().date()
-    
-    logger.info(f"Data final da transação: {data_transacao}")
+    # Processar data - SEMPRE usar a data atual no timezone correto (Brasil)
+    data_transacao = timezone.now().date()
+    logger.info(f"Data da transação definida como data atual (timezone BR): {data_transacao}")
     
     # Criar a transação
     transacao = Transacao.objects.create(
