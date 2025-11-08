@@ -2,6 +2,11 @@
 Django==5.0.2
 python-decouple==3.8
 pillow==11.0.0
+dj-database-url==2.1.0
+
+# Forms
+django-crispy-forms==2.1
+crispy-bootstrap5==2024.2
 
 # Database
 psycopg2-binary==2.9.10

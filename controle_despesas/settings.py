@@ -97,29 +97,29 @@ WSGI_APPLICATION = 'controle_despesas.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# PostgreSQL (Recomendado para produção)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='financa_db'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default='admin'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
-        'OPTIONS': {
-            'connect_timeout': 10,
-        },
-        'CONN_MAX_AGE': 600,  # Reutilizar conexões por 10 minutos
-    }
-}
+# Database
+# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# Para usar SQLite (desenvolvimento), descomente abaixo e comente PostgreSQL acima:
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+# Configuração flexível: PostgreSQL se DATABASE_URL existir, senão SQLite
+DATABASE_URL = config('DATABASE_URL', default='')
+
+if DATABASE_URL and DATABASE_URL.startswith('postgres'):
+    # PostgreSQL (produção com banco configurado)
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+        )
+    }
+else:
+    # SQLite (desenvolvimento ou PythonAnywhere gratuito)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
