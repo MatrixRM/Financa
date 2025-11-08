@@ -1301,50 +1301,77 @@ def chat_message_view(request):
         if intent == 'create_transaction':
             transaction_data = parsed_response.get('transaction')
             
-            # Validar se tem dados mínimos necessários
-            has_required_data = (
-                transaction_data and
-                transaction_data.get('amount') and
-                transaction_data.get('amount') > 0
-            )
-            
-            if has_required_data and request.user.is_authenticated:
-                try:
-                    # Verificar se há um transaction_id no contexto (para edição)
-                    pending_transaction_id = request.data.get('pending_transaction_id')
+            # A IA pode retornar uma transação (objeto) ou múltiplas (array)
+            if isinstance(transaction_data, list):
+                # Múltiplas transações
+                logger_chat.info(f"IA retornou {len(transaction_data)} transações")
+                saved_transactions = []
+                
+                for idx, trans_data in enumerate(transaction_data):
+                    has_required_data = trans_data.get('amount') and trans_data.get('amount') > 0
                     
-                    if pending_transaction_id:
-                        # Editar transação existente
-                        saved_transaction = update_chat_transaction(
-                            transaction_id=pending_transaction_id,
-                            user=request.user,
-                            transaction_data=transaction_data,
-                            original_message=message_text
-                        )
-                        logger_chat.info(f"Transação {saved_transaction.id} atualizada com sucesso")
-                    else:
-                        # Criar nova transação
-                        saved_transaction = save_chat_transaction(
-                            user=request.user,
-                            transaction_data=transaction_data,
-                            original_message=message_text
-                        )
-                        logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
-                    
-                    parsed_response['transaction_id'] = saved_transaction.id
+                    if has_required_data and request.user.is_authenticated:
+                        try:
+                            saved_transaction = save_chat_transaction(
+                                user=request.user,
+                                transaction_data=trans_data,
+                                original_message=f"{message_text} (transação {idx+1}/{len(transaction_data)})"
+                            )
+                            saved_transactions.append(saved_transaction)
+                            logger_chat.info(f"Transação {idx+1} salva: ID {saved_transaction.id}")
+                        except Exception as e:
+                            logger_chat.error(f"Erro ao salvar transação {idx+1}: {e}")
+                
+                if saved_transactions:
                     parsed_response['transaction_saved'] = True
-                    
-                    # Se precisar de esclarecimento, indicar que a transação está pendente
-                    if needs_clarification:
-                        parsed_response['transaction_pending'] = True
-                        
-                except Exception as e:
-                    logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
+                    parsed_response['transaction_ids'] = [t.id for t in saved_transactions]
+                    parsed_response['assistant_message'] = f"✅ {len(saved_transactions)} transações registradas com sucesso!"
+                else:
                     parsed_response['transaction_saved'] = False
-                    parsed_response['save_error'] = str(e)
-            else:
-                # Não há dados suficientes para criar a transação
-                if not has_required_data:
+                    
+            elif isinstance(transaction_data, dict):
+                # Transação única
+                has_required_data = (
+                    transaction_data.get('amount') and
+                    transaction_data.get('amount') > 0
+                )
+                
+                if has_required_data and request.user.is_authenticated:
+                    try:
+                        # Verificar se há um transaction_id no contexto (para edição)
+                        pending_transaction_id = request.data.get('pending_transaction_id')
+                        
+                        if pending_transaction_id:
+                            # Editar transação existente
+                            saved_transaction = update_chat_transaction(
+                                transaction_id=pending_transaction_id,
+                                user=request.user,
+                                transaction_data=transaction_data,
+                                original_message=message_text
+                            )
+                            logger_chat.info(f"Transação {saved_transaction.id} atualizada com sucesso")
+                        else:
+                            # Criar nova transação
+                            saved_transaction = save_chat_transaction(
+                                user=request.user,
+                                transaction_data=transaction_data,
+                                original_message=message_text
+                            )
+                            logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
+                        
+                        parsed_response['transaction_id'] = saved_transaction.id
+                        parsed_response['transaction_saved'] = True
+                        
+                        # Se precisar de esclarecimento, indicar que a transação está pendente
+                        if needs_clarification:
+                            parsed_response['transaction_pending'] = True
+                            
+                    except Exception as e:
+                        logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
+                        parsed_response['transaction_saved'] = False
+                        parsed_response['save_error'] = str(e)
+                else:
+                    # Não há dados suficientes para criar a transação
                     logger_chat.warning(f"Dados insuficientes para criar transação: {transaction_data}")
                     parsed_response['transaction_saved'] = False
                     if not needs_clarification:

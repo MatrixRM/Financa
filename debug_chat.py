@@ -58,9 +58,21 @@ def test_message_parsing(message):
         print(f"  - Confidence: {result.get('confidence', 'N/A')}")
         
         if result.get('transaction'):
+            transaction_data = result['transaction']
             print(f"\n💰 Dados da transação:")
-            for key, value in result['transaction'].items():
-                print(f"    {key}: {value}")
+            
+            # Suportar múltiplas transações (array) ou transação única (dict)
+            if isinstance(transaction_data, list):
+                print(f"    📦 {len(transaction_data)} transações detectadas:")
+                for idx, trans in enumerate(transaction_data, 1):
+                    print(f"\n    Transação {idx}:")
+                    for key, value in trans.items():
+                        print(f"      {key}: {value}")
+            elif isinstance(transaction_data, dict):
+                for key, value in transaction_data.items():
+                    print(f"    {key}: {value}")
+            else:
+                print(f"    ⚠️ Tipo inesperado: {type(transaction_data)}")
         
         if result.get('search_criteria'):
             print(f"\n🔍 Critérios de busca:")
