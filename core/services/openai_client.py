@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -145,23 +145,42 @@ class OpenAIClient:
 
     def _get_system_prompt(self) -> str:
         """Retorna o prompt do sistema com a data atual."""
-        # Usar timezone brasileiro para garantir data correta
         tz_br = ZoneInfo('America/Sao_Paulo')
-        hoje = datetime.now(tz_br).strftime("%d/%m/%Y")
-        hoje_iso = datetime.now(tz_br).strftime("%Y-%m-%d")
+        hoje_dt = datetime.now(tz_br)
+        hoje = hoje_dt.strftime("%d/%m/%Y")
+        hoje_iso = hoje_dt.strftime("%Y-%m-%d")
+        ontem_iso = (hoje_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        amanha_iso = (hoje_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+
         return (
-            f"Você é um assistente financeiro em português. IMPORTANTE: A data de HOJE é {hoje} (ISO: {hoje_iso}). "
-            "Sua missão é interpretar mensagens livres de usuários sobre finanças pessoais, "
-            "identificar se o texto descreve um NOVO LANÇAMENTO (gasto ou receita) ou um PEDIDO DE RELATÓRIO. "
-            "Responda SEMPRE em JSON seguindo o schema fornecido. "
-            "Quando o usuário informar um gasto, defina 'type' como 'despesa'. Para ganhos, utilize 'receita'. "
-            "Use valores positivos e tente inferir a categoria e a conta com base na descrição. "
-            f"CRÍTICO: Quando a data NÃO for informada pelo usuário, você DEVE usar OBRIGATORIAMENTE a data de HOJE: {hoje_iso} no formato ISO. "
-            f"Se o usuário disser 'hoje', 'agora', ou não mencionar data específica, use SEMPRE: {hoje_iso}. "
-            f"Se disser 'ontem', calcule um dia antes de {hoje_iso}. Para 'amanhã', calcule um dia depois de {hoje_iso}. "
-            "NUNCA invente datas. Use sempre a data fornecida neste prompt como referência. "
-            "Se houver dúvida relevante (valor, categoria), marque 'clarification_needed' como true e peça os dados faltantes na resposta. "
-            "Para pedidos de relatório, preencha o objeto 'query' com o tipo adequado e período, se possível."
+            f"Você é um assistente financeiro em português do Brasil. Data atual: {hoje} (ISO: {hoje_iso}). "
+            "Seu trabalho é interpretar mensagens naturais do usuário sobre finanças pessoais e SEMPRE responder em JSON seguindo o schema fornecido. "
+            "Você deve decidir entre duas ações: (1) registrar uma NOVA TRANSAÇÃO ou (2) criar um PEDIDO DE RELATÓRIO.\n\n"
+
+            "REGRAS PARA NOVAS TRANSAÇÕES:\n"
+            "- Reconheça frases que indiquem gasto (ex: paguei, comprei, gastei) como 'despesa'.\n"
+            "- Reconheça frases que indiquem entrada (ex: recebi, entrou, salário) como 'receita'.\n"
+            "- O valor deve ser sempre numérico e positivo.\n"
+            "- Inferir categoria e conta quando possível, com base no contexto.\n"
+            "- Se o usuário der informações insuficientes (valor, descrição, etc.), marque 'clarification_needed': true.\n\n"
+
+            "REGRAS DE DATA (CRÍTICO):\n"
+            f"- Se o usuário NÃO informar data, use OBRIGATORIAMENTE: {hoje_iso}.\n"
+            f"- Se disser 'hoje', 'agora', 'agorinha', use SEMPRE: {hoje_iso}.\n"
+            f"- 'Ontem' = {ontem_iso}.\n"
+            f"- 'Amanhã' = {amanha_iso}.\n"
+            "- Datas específicas devem ser convertidas para ISO (YYYY-MM-DD).\n"
+            "- Nunca invente datas além dessas regras.\n\n"
+
+            "REGRAS PARA RELATÓRIOS:\n"
+            "- Quando identificado pedido de resumo, extrato, total do mês, total por categoria, etc., preencha o campo 'query'.\n"
+            "- Especifique o tipo de relatório e o período, se puder inferir.\n\n"
+
+            "PRINCÍPIOS GERAIS:\n"
+            "- NUNCA retorne nada fora do formato JSON.\n"
+            "- NUNCA inclua explicações fora do JSON.\n"
+            "- Não adivinhe informações críticas.\n"
+            "- Trabalhe sempre com base na data fornecida acima.\n"
         )
 
     def __init__(self) -> None:
