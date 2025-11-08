@@ -45,4 +45,5 @@ urlpatterns = [
     # Chat Financeiro
     path('chat/', views.chat_interface_view, name='chat_interface'),
     path('chat/message/', views.chat_message_view, name='chat_message'),
+    path('chat/history/', views.chat_history_view, name='chat_history'),
 ]

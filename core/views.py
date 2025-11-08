@@ -1171,6 +1171,45 @@ def chat_interface_view(request):
     return render(request, 'chat/interface.html')
 
 
+@api_view(['GET'])
+def chat_history_view(request):
+    """Retorna o histórico recente de conversas do chat."""
+    if not request.user.is_authenticated:
+        return Response(
+            {"error": "Usuário não autenticado"},
+            status=rest_status.HTTP_401_UNAUTHORIZED
+        )
+    
+    from core.models import ChatHistory
+    
+    # Buscar últimas 20 mensagens
+    history = ChatHistory.objects.filter(
+        usuario=request.user
+    ).order_by('-created_at')[:20]
+    
+    # Reverter ordem para exibir do mais antigo ao mais recente
+    history = list(reversed(history))
+    
+    messages = []
+    for entry in history:
+        messages.append({
+            'role': 'user',
+            'content': entry.user_message,
+            'timestamp': entry.created_at.isoformat()
+        })
+        messages.append({
+            'role': 'assistant',
+            'content': entry.assistant_response,
+            'intent': entry.intent,
+            'timestamp': entry.created_at.isoformat()
+        })
+    
+    return Response({
+        'messages': messages,
+        'count': len(messages)
+    }, status=rest_status.HTTP_200_OK)
+
+
 from rest_framework import status as rest_status
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -1222,6 +1261,23 @@ def chat_message_view(request):
                 {"error": "Não foi possível obter texto da mensagem ou transcrição."},
                 status=rest_status.HTTP_400_BAD_REQUEST
             )
+
+        # Se o usuário mencionar edição, adicionar transações recentes ao contexto
+        if any(word in message_text.lower() for word in ['edit', 'editar', 'alterar', 'mudar', 'corrigir', 'atualizar']):
+            if request.user.is_authenticated and request.user.casa:
+                recent_transactions = Transacao.objects.filter(
+                    casa=request.user.casa
+                ).order_by('-data', '-id')[:5]
+                
+                if recent_transactions:
+                    trans_list = "\n".join([
+                        f"ID{t.id}: {t.data.strftime('%d/%m')} - {t.categoria.nome} - {t.conta.nome} - R$ {t.valor:.2f}"
+                        for t in recent_transactions
+                    ])
+                    context.append({
+                        'role': 'system',
+                        'content': f"Transações recentes do usuário:\n{trans_list}"
+                    })
 
         # Processa a mensagem com o modelo
         logger_chat.info(f"Processando mensagem: {message_text[:100]}...")

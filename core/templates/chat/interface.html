@@ -21,6 +21,13 @@
         padding: 20px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .chat-header-content {
+        flex: 1;
         text-align: center;
     }
 
@@ -33,6 +40,21 @@
         margin: 5px 0 0;
         opacity: 0.9;
         font-size: 14px;
+    }
+    
+    .clear-history-btn {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.3s;
+    }
+    
+    .clear-history-btn:hover {
+        background: rgba(255,255,255,0.3);
     }
 
     .chat-messages {
@@ -243,12 +265,18 @@
 <div class="container-fluid py-4">
     <div class="chat-container">
         <div class="chat-header">
-            <h2>💬 Chat Financeiro</h2>
-            <p>Converse naturalmente sobre suas finanças</p>
+            <button class="clear-history-btn" onclick="clearChatHistory()" title="Limpar histórico">
+                🗑️ Limpar
+            </button>
+            <div class="chat-header-content">
+                <h2>💬 Chat Financeiro</h2>
+                <p>Converse naturalmente sobre suas finanças</p>
+            </div>
+            <div style="width: 80px;"></div> <!-- Espaço para balancear o layout -->
         </div>
 
         <div class="chat-messages" id="chat-messages">
-            <div class="message assistant">
+            <div class="message assistant" id="welcome-message">
                 <div class="message-avatar">🤖</div>
                 <div class="message-bubble">
                     Olá! Sou seu assistente financeiro. Você pode me dizer sobre seus gastos e receitas de forma natural, 
@@ -295,6 +323,40 @@ let conversationContext = [];
 let mediaRecorder = null;
 let audioChunks = [];
 let pendingTransactionId = null;  // ID da transação pendente de complemento
+
+// Carregar histórico ao iniciar
+async function loadChatHistory() {
+    try {
+        const response = await fetch('/chat/history/');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        // Se houver histórico, remover mensagem de boas-vindas
+        if (data.messages && data.messages.length > 0) {
+            const welcomeMsg = document.getElementById('welcome-message');
+            if (welcomeMsg) welcomeMsg.remove();
+            
+            // Adicionar mensagens ao chat e ao contexto
+            data.messages.forEach(msg => {
+                const sender = msg.role === 'user' ? 'user' : 'assistant';
+                addMessage(msg.content, sender);
+                
+                // Adicionar ao contexto
+                conversationContext.push({
+                    role: msg.role,
+                    content: msg.content
+                });
+            });
+            
+            // Scroll para o final
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+    }
+}
 
 // Auto-resize textarea
 messageInput.addEventListener('input', function() {
@@ -598,6 +660,32 @@ async function sendAudioMessage(audioBlob) {
         sendButton.disabled = false;
         messageInput.disabled = false;
     }
+}
+
+// Carregar histórico quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    loadChatHistory();
+});
+
+// Função para limpar histórico
+async function clearChatHistory() {
+    if (!confirm('Tem certeza que deseja limpar todo o histórico do chat? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    // Limpar visualmente
+    const welcomeMsg = document.getElementById('welcome-message');
+    chatMessages.innerHTML = '';
+    if (welcomeMsg) {
+        chatMessages.appendChild(welcomeMsg.cloneNode(true));
+    }
+    
+    // Limpar contexto
+    conversationContext = [];
+    pendingTransactionId = null;
+    
+    // Aqui você pode adicionar uma chamada para deletar do banco se desejar
+    // await fetch('/chat/clear-history/', { method: 'POST' });
 }
 </script>
 {% endblock %}
