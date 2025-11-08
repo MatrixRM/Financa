@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Minha Casa{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0"><i class="bi bi-house"></i> Detalhes da Casa</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Nome da Casa:</div>
+                        <div class="col-md-8">{{ casa.nome }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Código de Convite:</div>
+                        <div class="col-md-8">
+                            <span class="badge bg-primary fs-5">{{ casa.codigo_convite }}</span>
+                            <button class="btn btn-sm btn-outline-primary ms-2" data-copy="{{ casa.codigo_convite }}">
+                                <i class="bi bi-clipboard"></i> Copiar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Membros:</div>
+                        <div class="col-md-8">
+                            <ul class="list-unstyled mb-0">
+                                {% for membro in casa.membros.all %}
+                                <li class="mb-2">
+                                    <i class="bi bi-person-fill"></i> 
+                                    {{ membro.get_full_name|default:membro.username }}
+                                    {% if membro == user %}
+                                        <span class="badge bg-success">Você</span>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% if casa.tem_vaga %}
+                            <div class="alert alert-info mt-3">
+                                <i class="bi bi-info-circle"></i>
+                                Compartilhe o código <strong>{{ casa.codigo_convite }}</strong> para convidar outra pessoa!
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Saldo Total:</div>
+                        <div class="col-md-8">
+                            <h3 class="mb-0 {% if casa.saldo_total >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                R$ {{ casa.saldo_total|floatformat:2 }}
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

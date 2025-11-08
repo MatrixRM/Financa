@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - {{ casa.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="mb-4">
+        <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="stat-label mb-1">Receitas do Mês</p>
+                            <h3 class="stat-value text-success mb-0">R$ {{ receitas_mes|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="bi bi-arrow-up-circle text-success" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card stat-card danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="stat-label mb-1">Despesas do Mês</p>
+                            <h3 class="stat-value text-danger mb-0">R$ {{ despesas_mes|floatformat:2 }}</h3>
+                        </div>
+                        <div>
+                            <i class="bi bi-arrow-down-circle text-danger" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="stat-label mb-1">Saldo do Mês</p>
+                            <h3 class="stat-value {% if saldo_mes >= 0 %}text-success{% else %}text-danger{% endif %} mb-0">
+                                R$ {{ saldo_mes|floatformat:2 }}
+                            </h3>
+                        </div>
+                        <div>
+                            <i class="bi bi-wallet2 {% if saldo_mes >= 0 %}text-success{% else %}text-danger{% endif %}" 
+                               style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card stat-card warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="stat-label mb-1">Saldo Total</p>
+                            <h3 class="stat-value {% if saldo_total >= 0 %}text-primary{% else %}text-danger{% endif %} mb-0">
+                                R$ {{ saldo_total|floatformat:2 }}
+                            </h3>
+                        </div>
+                        <div>
+                            <i class="bi bi-piggy-bank text-primary" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Gráfico de Despesas por Categoria -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Despesas por Categoria (Este Mês)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartDespesasCategoria"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Últimas Transações -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Últimas Transações</h5>
+                    <a href="{% url 'transacao_list' %}" class="btn btn-sm btn-primary">Ver Todas</a>
+                </div>
+                <div class="card-body p-2">
+                    {% if transacoes_recentes %}
+                        {% for transacao in transacoes_recentes %}
+                        <div class="transaction-item">
+                            <div class="transaction-icon {{ transacao.tipo }}">
+                                <i class="bi {% if transacao.tipo == 'receita' %}bi-arrow-up{% else %}bi-arrow-down{% endif %}"></i>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-title">{{ transacao.titulo }}</div>
+                                <div class="transaction-meta">
+                                    <i class="bi bi-tag"></i> {{ transacao.categoria.nome }} • 
+                                    <i class="bi bi-calendar"></i> {{ transacao.data|date:"d/m/Y" }}
+                                </div>
+                            </div>
+                            <div class="transaction-value {{ transacao.tipo }}">
+                                {% if transacao.tipo == 'receita' %}+{% else %}-{% endif %}R$ {{ transacao.valor|floatformat:2 }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-inbox empty-state-icon"></i>
+                            <h3>Nenhuma transação</h3>
+                            <p>Adicione sua primeira transação!</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contas -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-bank"></i> Suas Contas</h5>
+                    <a href="{% url 'conta_list' %}" class="btn btn-sm btn-primary">Gerenciar Contas</a>
+                </div>
+                <div class="card-body">
+                    {% if contas %}
+                        <div class="row g-3">
+                            {% for conta in contas %}
+                            <div class="col-md-4 col-lg-3">
+                                <div class="card h-100" style="border-left: 4px solid {{ conta.cor }};">
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ conta.nome }}</h6>
+                                        <p class="text-muted mb-2">{{ conta.get_tipo_display }}</p>
+                                        <h4 class="mb-0 {% if conta.saldo_atual >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            R$ {{ conta.saldo_atual|floatformat:2 }}
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-bank empty-state-icon"></i>
+                            <h3>Nenhuma conta cadastrada</h3>
+                            <p>Adicione suas contas para começar!</p>
+                            <a href="{% url 'conta_create' %}" class="btn btn-primary">Adicionar Conta</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gráfico de Despesas por Categoria
+    const ctx = document.getElementById('chartDespesasCategoria');
+    
+    {% if despesas_por_categoria %}
+    const labels = [{% for item in despesas_por_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const data = [{% for item in despesas_por_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const colors = [{% for item in despesas_por_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% else %}
+    ctx.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox empty-state-icon"></i><h3>Sem dados</h3><p>Adicione despesas para ver o gráfico</p></div>';
+    {% endif %}
+});
+</script>
+{% endblock %}

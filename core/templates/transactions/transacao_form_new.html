@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .categoria-option {
+        padding: 8px;
+        border-left: 4px solid;
+    }
+    .form-control:focus {
+        border-color: {% if tipo == 'despesa' %}#dc3545{% else %}#28a745{% endif %};
+        box-shadow: 0 0 0 0.2rem {% if tipo == 'despesa' %}rgba(220, 53, 69, 0.25){% else %}rgba(40, 167, 69, 0.25){% endif %};
+    }
+    .btn-primary {
+        background-color: {% if tipo == 'despesa' %}#dc3545{% else %}#28a745{% endif %};
+        border-color: {% if tipo == 'despesa' %}#dc3545{% else %}#28a745{% endif %};
+    }
+    .btn-primary:hover {
+        background-color: {% if tipo == 'despesa' %}#c82333{% else %}#218838{% endif %};
+        border-color: {% if tipo == 'despesa' %}#bd2130{% else %}#1e7e34{% endif %};
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header {% if tipo == 'despesa' %}bg-danger{% else %}bg-success{% endif %} text-white">
+                    <h4 class="mb-0">
+                        <i class="bi {% if tipo == 'despesa' %}bi-dash-circle{% else %}bi-plus-circle{% endif %}"></i>
+                        {{ title }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Datalist com títulos anteriores -->
+                    <datalist id="titulos-anteriores">
+                        {% for titulo in titulos_anteriores %}
+                        <option value="{{ titulo.titulo }}" data-categoria="{{ titulo.categoria_id }}" data-valor="{{ titulo.valor_medio }}">
+                            {{ titulo.titulo }} - Média: R$ {{ titulo.valor_medio|floatformat:2 }}
+                        </option>
+                        {% endfor %}
+                    </datalist>
+                    
+                    {% crispy form %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tituloInput = document.querySelector('input[name="titulo"]');
+    const valorInput = document.querySelector('input[name="valor"]');
+    const categoriaSelect = document.querySelector('select[name="categoria"]');
+    
+    if (tituloInput && valorInput) {
+        // Quando o usuário seleciona uma sugestão do datalist
+        tituloInput.addEventListener('input', function() {
+            const titulo = this.value;
+            const datalist = document.getElementById('titulos-anteriores');
+            const options = datalist.querySelectorAll('option');
+            
+            options.forEach(option => {
+                if (option.value === titulo) {
+                    // Preencher valor sugerido
+                    const valorSugerido = option.getAttribute('data-valor');
+                    if (valorSugerido && !valorInput.value) {
+                        valorInput.value = parseFloat(valorSugerido).toFixed(2);
+                        valorInput.classList.add('is-valid');
+                        
+                        // Criar feedback visual
+                        let feedback = valorInput.nextElementSibling;
+                        if (!feedback || !feedback.classList.contains('valid-feedback')) {
+                            feedback = document.createElement('div');
+                            feedback.className = 'valid-feedback';
+                            valorInput.parentNode.appendChild(feedback);
+                        }
+                        feedback.textContent = `Valor médio sugerido: R$ ${parseFloat(valorSugerido).toFixed(2)}`;
+                        feedback.style.display = 'block';
+                    }
+                    
+                    // Preencher categoria sugerida
+                    const categoriaId = option.getAttribute('data-categoria');
+                    if (categoriaId && categoriaSelect) {
+                        categoriaSelect.value = categoriaId;
+                        categoriaSelect.classList.add('is-valid');
+                    }
+                }
+            });
+        });
+        
+        // Focar automaticamente no campo de título
+        tituloInput.focus();
+    }
+    
+    // Atalhos de teclado
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + S para salvar
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            document.querySelector('button[type="submit"]').click();
+        }
+        
+        // Ctrl + Enter para salvar
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            document.querySelector('button[type="submit"]').click();
+        }
+    });
+});
+</script>
+{% endblock %}

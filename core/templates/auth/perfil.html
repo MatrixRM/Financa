@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0"><i class="bi bi-person-circle"></i> Meu Perfil</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Nome de Usuário:</div>
+                        <div class="col-md-8">{{ user.username }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Nome Completo:</div>
+                        <div class="col-md-8">{{ user.get_full_name|default:"Não informado" }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">E-mail:</div>
+                        <div class="col-md-8">{{ user.email|default:"Não informado" }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 fw-bold">Casa:</div>
+                        <div class="col-md-8">
+                            {% if user.casa %}
+                                {{ user.casa.nome }}
+                                <a href="{% url 'casa_detalhes' %}" class="btn btn-sm btn-outline-primary ms-2">
+                                    Ver Detalhes
+                                </a>
+                            {% else %}
+                                <span class="text-muted">Nenhuma casa associada</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configurações de Segurança -->
+            <div class="card mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Segurança</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Autenticação Biométrica</h6>
+                            <p class="text-muted mb-0">
+                                {% if user.biometria_habilitada %}
+                                    <span class="badge bg-success">Ativa</span>
+                                    Use sua digital para fazer login mais rápido e seguro
+                                {% else %}
+                                    <span class="badge bg-secondary">Inativa</span>
+                                    Configure seu dispositivo para login com digital
+                                {% endif %}
+                            </p>
+                        </div>
+                        <a href="{% url 'biometria_settings' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-fingerprint"></i> Gerenciar
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {% if not user.casa %}
+            <!-- Formulário para criar ou entrar em casa -->
+            <div class="card mt-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Configure sua Casa</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-4">Você precisa estar associado a uma casa para usar o sistema. Escolha uma das opções abaixo:</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="opcao" id="opcaoCriar" value="criar" checked>
+                                <label class="form-check-label fw-bold" for="opcaoCriar">
+                                    Criar Nova Casa
+                                </label>
+                            </div>
+                            <div class="ms-4" id="formCriar">
+                                <label for="nome_casa" class="form-label">Nome da Casa:</label>
+                                <input type="text" class="form-control" id="nome_casa" name="nome_casa" placeholder="Ex: Família Silva">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="opcao" id="opcaoEntrar" value="entrar">
+                                <label class="form-check-label fw-bold" for="opcaoEntrar">
+                                    Entrar em Casa Existente
+                                </label>
+                            </div>
+                            <div class="ms-4" id="formEntrar" style="display: none;">
+                                <label for="codigo_convite" class="form-label">Código de Convite:</label>
+                                <input type="text" class="form-control" id="codigo_convite" name="codigo_convite" placeholder="Ex: DEMO2025" style="text-transform: uppercase;">
+                                <small class="form-text text-muted">Peça o código de convite para quem já tem uma casa.</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Confirmar
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const radioCriar = document.getElementById('opcaoCriar');
+                const radioEntrar = document.getElementById('opcaoEntrar');
+                const formCriar = document.getElementById('formCriar');
+                const formEntrar = document.getElementById('formEntrar');
+
+                function toggleForms() {
+                    if (radioCriar.checked) {
+                        formCriar.style.display = 'block';
+                        formEntrar.style.display = 'none';
+                        document.getElementById('nome_casa').required = true;
+                        document.getElementById('codigo_convite').required = false;
+                    } else {
+                        formCriar.style.display = 'none';
+                        formEntrar.style.display = 'block';
+                        document.getElementById('nome_casa').required = false;
+                        document.getElementById('codigo_convite').required = true;
+                    }
+                }
+
+                radioCriar.addEventListener('change', toggleForms);
+                radioEntrar.addEventListener('change', toggleForms);
+                toggleForms();
+            });
+            </script>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

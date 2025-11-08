@@ -1,0 +1,175 @@
+<!-- Modal de Transação Rápida -->
+<div class="modal fade" id="quickTransacaoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightning-charge"></i> Transação Rápida
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickTransacaoForm" method="post" action="{% url 'transacao_create' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="quick" value="1">
+                    
+                    <!-- Tipo -->
+                    <div class="btn-group w-100 mb-3" role="group" id="tipoGroup">
+                        <input type="radio" class="btn-check" name="tipo" id="tipo_despesa" value="despesa" checked>
+                        <label class="btn btn-outline-danger" for="tipo_despesa">
+                            <i class="bi bi-dash-circle"></i> Despesa
+                        </label>
+                        
+                        <input type="radio" class="btn-check" name="tipo" id="tipo_receita" value="receita">
+                        <label class="btn btn-outline-success" for="tipo_receita">
+                            <i class="bi bi-plus-circle"></i> Receita
+                        </label>
+                    </div>
+                    
+                    <!-- Descrição -->
+                    <div class="mb-3">
+                        <label for="quick_titulo" class="form-label">
+                            <i class="bi bi-pencil"></i> Descrição <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="quick_titulo" name="titulo" required 
+                               list="quick-titulos" placeholder="Digite a descrição...">
+                        <datalist id="quick-titulos">
+                            <!-- Populado via JavaScript -->
+                        </datalist>
+                    </div>
+                    
+                    <!-- Valor -->
+                    <div class="mb-3">
+                        <label for="quick_valor" class="form-label">
+                            <i class="bi bi-cash"></i> Valor (R$) <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="quick_valor" name="valor" 
+                               required step="0.01" min="0.01" placeholder="0,00">
+                    </div>
+                    
+                    <!-- Categoria -->
+                    <div class="mb-3">
+                        <label for="quick_categoria" class="form-label">
+                            <i class="bi bi-tag"></i> Categoria <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="quick_categoria" name="categoria" required>
+                            <option value="">Selecione...</option>
+                            {% for cat in categorias %}
+                            <option value="{{ cat.id }}" data-tipo="{{ cat.tipo }}" style="color: {{ cat.cor }}">
+                                {{ cat.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Conta -->
+                    <div class="mb-3">
+                        <label for="quick_conta" class="form-label">
+                            <i class="bi bi-bank"></i> Conta <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="quick_conta" name="conta" required>
+                            {% for conta in contas %}
+                            <option value="{{ conta.id }}">{{ conta.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Status (apenas para despesas) -->
+                    <div class="mb-3" id="statusGroup">
+                        <label for="quick_status" class="form-label">
+                            <i class="bi bi-check-circle"></i> Status
+                        </label>
+                        <select class="form-select" id="quick_status" name="status">
+                            <option value="paga">Paga</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="cancelada">Cancelada</option>
+                        </select>
+                        <small class="text-muted">Para receitas, sempre será "paga"</small>
+                    </div>
+                    
+                    <!-- Data (padrão: hoje) -->
+                    <input type="hidden" name="data" id="quick_data">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Cancelar
+                </button>
+                <button type="submit" form="quickTransacaoForm" class="btn btn-primary" id="btnSalvarQuick">
+                    <i class="bi bi-check-lg"></i> Salvar Rapidamente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('quickTransacaoModal');
+    const form = document.getElementById('quickTransacaoForm');
+    const tipoInputs = document.querySelectorAll('input[name="tipo"]');
+    const categoriaSelect = document.getElementById('quick_categoria');
+    const statusGroup = document.getElementById('statusGroup');
+    const dataInput = document.getElementById('quick_data');
+    const btnSalvar = document.getElementById('btnSalvarQuick');
+    
+    // Definir data de hoje
+    const hoje = new Date().toISOString().split('T')[0];
+    dataInput.value = hoje;
+    
+    // Filtrar categorias por tipo e ocultar/mostrar status
+    function atualizarFormulario() {
+        const tipoSelecionado = document.querySelector('input[name="tipo"]:checked').value;
+        const options = categoriaSelect.querySelectorAll('option[data-tipo]');
+        
+        // Filtrar categorias
+        options.forEach(option => {
+            if (option.dataset.tipo === tipoSelecionado) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        
+        // Resetar seleção
+        categoriaSelect.value = '';
+        
+        // Ocultar/mostrar campo de status
+        if (tipoSelecionado === 'receita') {
+            statusGroup.style.display = 'none';
+            document.getElementById('quick_status').value = 'paga';
+            btnSalvar.className = 'btn btn-success';
+            btnSalvar.innerHTML = '<i class="bi bi-check-lg"></i> Salvar Receita';
+        } else {
+            statusGroup.style.display = 'block';
+            btnSalvar.className = 'btn btn-danger';
+            btnSalvar.innerHTML = '<i class="bi bi-check-lg"></i> Salvar Despesa';
+        }
+    }
+    
+    tipoInputs.forEach(input => {
+        input.addEventListener('change', atualizarFormulario);
+    });
+    
+    // Quando o modal abre
+    modal.addEventListener('shown.bs.modal', function() {
+        document.getElementById('quick_titulo').focus();
+        atualizarFormulario();
+    });
+    
+    // Limpar formulário quando modal fecha
+    modal.addEventListener('hidden.bs.modal', function() {
+        form.reset();
+        dataInput.value = hoje;
+    });
+    
+    // Atalho de teclado: Alt + N para abrir modal
+    document.addEventListener('keydown', function(e) {
+        if (e.altKey && e.key === 'n') {
+            e.preventDefault();
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    });
+});
+</script>

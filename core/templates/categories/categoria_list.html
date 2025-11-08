@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Categorias{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-tags"></i> Categorias</h2>
+        <a href="{% url 'categoria_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Nova Categoria
+        </a>
+    </div>
+
+    {% if categorias %}
+    <!-- Despesas -->
+    <h4 class="mb-3">Despesas</h4>
+    <div class="row g-3 mb-4">
+        {% for categoria in categorias %}
+            {% if categoria.tipo == 'despesa' %}
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="category-icon me-3" style="color: {{ categoria.cor }};">
+                                <i class="{{ categoria.icone }}" style="font-size: 2rem;"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">{{ categoria.nome }}</h6>
+                                {% if not categoria.ativa %}
+                                <span class="badge bg-secondary">Inativa</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'categoria_update' categoria.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i> Editar
+                            </a>
+                            <form method="post" action="{% url 'categoria_delete' categoria.pk %}" 
+                                  onsubmit="return confirm('Tem certeza?');" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- Receitas -->
+    <h4 class="mb-3">Receitas</h4>
+    <div class="row g-3">
+        {% for categoria in categorias %}
+            {% if categoria.tipo == 'receita' %}
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="category-icon me-3" style="color: {{ categoria.cor }};">
+                                <i class="{{ categoria.icone }}" style="font-size: 2rem;"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">{{ categoria.nome }}</h6>
+                                {% if not categoria.ativa %}
+                                <span class="badge bg-secondary">Inativa</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'categoria_update' categoria.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i> Editar
+                            </a>
+                            <form method="post" action="{% url 'categoria_delete' categoria.pk %}" 
+                                  onsubmit="return confirm('Tem certeza?');" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state">
+                <i class="bi bi-tags empty-state-icon"></i>
+                <h3>Nenhuma categoria cadastrada</h3>
+                <p>Adicione suas primeiras categorias para organizar suas transações!</p>
+                <a href="{% url 'categoria_create' %}" class="btn btn-primary">Adicionar Categoria</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

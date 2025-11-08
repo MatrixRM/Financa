@@ -1,0 +1,493 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Login - Controle de Despesas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .biometric-section {
+        text-align: center;
+        padding: 2rem 0;
+        border-bottom: 1px solid #dee2e6;
+        margin-bottom: 2rem;
+        display: block; /* Visível por padrão */
+    }
+    
+    .biometric-section.hidden {
+        display: none; /* Oculto quando não suportado */
+    }
+    
+    .biometric-btn {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 3px solid #0d6efd;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .biometric-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    
+    .biometric-btn:active {
+        transform: scale(0.95);
+    }
+    
+    .biometric-btn.loading {
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
+    .biometric-text {
+        margin-top: 1rem;
+        font-size: 1.1rem;
+        color: #6c757d;
+    }
+    
+    .alternative-login {
+        text-align: center;
+        margin: 1.5rem 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .alternative-login::before,
+    .alternative-login::after {
+        content: "";
+        display: inline-block;
+        width: 40%;
+        height: 1px;
+        background: #dee2e6;
+        vertical-align: middle;
+        margin: 0 10px;
+    }
+    
+    .biometric-status {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+    
+    .biometric-status.success {
+        background: #d1e7dd;
+        color: #0f5132;
+        border: 1px solid #badbcc;
+    }
+    
+    .biometric-status.error {
+        background: #f8d7da;
+        color: #842029;
+        border: 1px solid #f5c2c7;
+    }
+    
+    .biometric-status.info {
+        background: #cff4fc;
+        color: #055160;
+        border: 1px solid #b6effb;
+    }
+    
+    .setup-biometric-offer {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        border: 2px solid #667eea;
+        border-radius: 12px;
+        text-align: center;
+    }
+    
+    .setup-biometric-offer button {
+        margin-top: 0.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .setup-biometric-offer button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="card">
+            <div class="auth-header">
+                <i class="bi bi-wallet2 text-primary" style="font-size: 3rem;"></i>
+                <h1>Controle de Despesas</h1>
+                <p>Faça login para gerenciar suas finanças</p>
+            </div>
+            <div class="card-body p-4">
+                <!-- Seção de Login Biométrico -->
+                <div class="biometric-section" id="biometricSection">
+                    <button type="button" class="biometric-btn" id="biometricBtn" title="Login com Biometria">
+                        <i class="bi bi-fingerprint"></i>
+                    </button>
+                    <div class="biometric-text">
+                        <strong>Login Rápido</strong><br>
+                        <small>Toque para usar sua digital ou Face ID</small>
+                    </div>
+                    <div id="biometricStatus" class="biometric-status" style="display: none;"></div>
+                    
+                    <!-- Opção para cadastrar biometria -->
+                    <div id="setupBiometricHint" style="display: none; margin-top: 1rem;">
+                        <div class="alert alert-info py-2 px-3 mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Nenhuma biometria cadastrada!</strong><br>
+                            <small>
+                                Faça login com sua senha primeiro e depois ative o login rápido com biometria nas 
+                                <strong>Configurações de Segurança</strong> no seu perfil.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Divisor -->
+                <div class="alternative-login" id="alternativeLoginDivider">ou use sua senha</div>
+                
+                <!-- Formulário tradicional -->
+                <div id="traditionalLogin">
+                    {% crispy form %}
+                    
+                    <!-- Oferta de cadastro de biometria (aparece após login bem-sucedido em mobile) -->
+                    <div id="setupBiometricOffer" class="setup-biometric-offer" style="display: none;">
+                        <i class="bi bi-fingerprint" style="font-size: 2.5rem; color: #667eea;"></i>
+                        <h5 class="mt-2 mb-2">🚀 Ative o Login Rápido!</h5>
+                        <p class="mb-2">
+                            Cadastre sua biometria agora e faça login em <strong>segundos</strong> nas próximas vezes!
+                        </p>
+                        <button type="button" id="setupBiometricNowBtn">
+                            <i class="bi bi-fingerprint"></i> Cadastrar Agora
+                        </button>
+                        <br>
+                        <small class="text-muted mt-2 d-block">Ou faça isso depois no seu perfil</small>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <p class="text-muted mb-2">
+                            Não tem uma conta? 
+                            <a href="{% url 'registro' %}" class="text-primary">Cadastre-se</a>
+                        </p>
+                        <!-- Dica mobile -->
+                        <div id="mobileBiometricHint" class="card border-primary" style="background: #e7f3ff; display: none;">
+                            <div class="card-body py-2 px-3">
+                                <p class="mb-1" style="font-size: 0.9rem;">
+                                    <i class="bi bi-shield-check text-primary"></i>
+                                    <strong>Login Rápido Disponível!</strong>
+                                </p>
+                                <p class="text-muted mb-0" style="font-size: 0.85rem;">
+                                    Após o login, você poderá cadastrar sua digital ou Face ID para entrar em segundos! 🚀
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== INICIANDO SISTEMA DE BIOMETRIA ===');
+    
+    const biometricBtn = document.getElementById('biometricBtn');
+    const biometricStatus = document.getElementById('biometricStatus');
+    const biometricSection = document.getElementById('biometricSection');
+    const setupBiometricHint = document.getElementById('setupBiometricHint');
+    const alternativeLoginDivider = document.getElementById('alternativeLoginDivider');
+    const mobileBiometricHint = document.getElementById('mobileBiometricHint');
+    const setupBiometricOffer = document.getElementById('setupBiometricOffer');
+    const setupBiometricNowBtn = document.getElementById('setupBiometricNowBtn');
+    
+    console.log('Elementos encontrados:', {
+        biometricBtn: !!biometricBtn,
+        biometricSection: !!biometricSection,
+        alternativeLoginDivider: !!alternativeLoginDivider
+    });
+    
+    // Detectar se é dispositivo móvel
+    function isMobileDevice() {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        
+        // Verificar user agent
+        const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i;
+        const isMobileUA = mobileRegex.test(userAgent.toLowerCase());
+        
+        // Verificar touch
+        const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        
+        // Verificar tamanho da tela
+        const isSmallScreen = window.innerWidth <= 768;
+        
+        return isMobileUA || (hasTouch && isSmallScreen);
+    }
+    
+    // Verificar se WebAuthn está disponível
+    console.log('window.PublicKeyCredential:', !!window.PublicKeyCredential);
+    
+    if (!window.PublicKeyCredential) {
+        // Sem suporte: ocultar seção biométrica e mostrar aviso
+        console.warn('❌ WebAuthn NÃO disponível neste navegador');
+        biometricSection.classList.add('hidden');
+        alternativeLoginDivider.style.display = 'none';
+        return;
+    }
+    
+    console.log('✅ WebAuthn disponível! Mostrando opção biométrica.');
+    
+    // WebAuthn disponível: mostrar seção biométrica (já está visível por padrão)
+    biometricSection.style.display = 'block';
+    biometricSection.classList.remove('hidden');
+    alternativeLoginDivider.style.display = 'block';
+    
+    // Verificar se há credenciais cadastradas ao carregar
+    checkExistingCredentials();
+    
+    async function checkExistingCredentials() {
+        try {
+            const response = await fetch('/biometria/challenge/', {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Credenciais encontradas:', data.allowCredentials?.length || 0);
+                
+                if (!data.allowCredentials || data.allowCredentials.length === 0) {
+                    // Sem credenciais: mostrar hint
+                    setupBiometricHint.style.display = 'block';
+                    if (isMobileDevice()) {
+                        mobileBiometricHint.style.display = 'block';
+                    }
+                } else {
+                    console.log('Usuário possui biometria cadastrada!');
+                }
+            }
+        } catch (error) {
+            console.log('Erro ao verificar credenciais:', error);
+        }
+    }
+    
+    // Função para mostrar status
+    function showStatus(message, type) {
+        biometricStatus.textContent = message;
+        biometricStatus.className = 'biometric-status ' + type;
+        biometricStatus.style.display = 'block';
+        
+        if (type === 'success' || type === 'error') {
+            setTimeout(() => {
+                biometricStatus.style.display = 'none';
+            }, 5000);
+        }
+    }
+    
+    // Função para converter Base64URL para ArrayBuffer
+    function base64urlToArrayBuffer(base64url) {
+        const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        const padLength = (4 - (base64.length % 4)) % 4;
+        const padded = base64 + '='.repeat(padLength);
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+    
+    // Função para converter ArrayBuffer para Base64URL
+    function arrayBufferToBase64url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+    
+    // Handler do botão biométrico
+    biometricBtn.addEventListener('click', async function() {
+        try {
+            biometricBtn.classList.add('loading');
+            showStatus('Preparando autenticação...', 'info');
+            
+            // 1. Obter challenge do servidor
+            const challengeResponse = await fetch('/biometria/challenge/', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!challengeResponse.ok) {
+                throw new Error('Erro ao obter desafio de autenticação');
+            }
+            
+            const challengeData = await challengeResponse.json();
+            
+            // Verificar se não há credenciais cadastradas
+            if (!challengeData.allowCredentials || challengeData.allowCredentials.length === 0) {
+                showStatus('Faça login com senha primeiro para cadastrar sua biometria', 'info');
+                setupBiometricHint.style.display = 'block';
+                mobileBiometricHint.style.display = 'block';
+                biometricBtn.classList.remove('loading');
+                return;
+            }
+            
+            // 2. Preparar opções para WebAuthn
+            const publicKeyOptions = {
+                challenge: base64urlToArrayBuffer(challengeData.challenge),
+                timeout: 60000,
+                rpId: window.location.hostname,
+                userVerification: 'preferred'
+            };
+            
+            if (challengeData.allowCredentials && challengeData.allowCredentials.length > 0) {
+                publicKeyOptions.allowCredentials = challengeData.allowCredentials.map(cred => ({
+                    type: 'public-key',
+                    id: base64urlToArrayBuffer(cred.id)
+                }));
+            }
+            
+            showStatus('Aguardando biometria...', 'info');
+            
+            // 3. Solicitar autenticação biométrica
+            const assertion = await navigator.credentials.get({
+                publicKey: publicKeyOptions
+            });
+            
+            showStatus('Verificando...', 'info');
+            
+            // 4. Enviar resposta para o servidor
+            const verifyResponse = await fetch('/biometria/verify/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    id: assertion.id,
+                    rawId: arrayBufferToBase64url(assertion.rawId),
+                    type: assertion.type,
+                    response: {
+                        clientDataJSON: arrayBufferToBase64url(assertion.response.clientDataJSON),
+                        authenticatorData: arrayBufferToBase64url(assertion.response.authenticatorData),
+                        signature: arrayBufferToBase64url(assertion.response.signature),
+                        userHandle: assertion.response.userHandle ? arrayBufferToBase64url(assertion.response.userHandle) : null
+                    }
+                })
+            });
+            
+            const verifyData = await verifyResponse.json();
+            
+            if (verifyData.success) {
+                showStatus('✓ Login realizado com sucesso!', 'success');
+                setTimeout(() => {
+                    window.location.href = verifyData.redirect || '/dashboard/';
+                }, 1000);
+            } else {
+                showStatus('✗ ' + (verifyData.error || 'Falha na autenticação'), 'error');
+            }
+            
+        } catch (error) {
+            console.error('Erro biométrico:', error);
+            
+            let errorMessage = 'Erro ao autenticar';
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Autenticação cancelada ou não permitida';
+            } else if (error.name === 'InvalidStateError') {
+                errorMessage = 'Credencial não encontrada. Use login tradicional primeiro.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showStatus('✗ ' + errorMessage, 'error');
+        } finally {
+            biometricBtn.classList.remove('loading');
+        }
+    });
+    
+    // Handler para interceptar login tradicional bem-sucedido
+    const loginForm = document.querySelector('form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            // Armazenar que o usuário fez login
+            sessionStorage.setItem('justLoggedIn', 'true');
+        });
+    }
+    
+    // Verificar se acabou de fazer login
+    if (sessionStorage.getItem('justLoggedIn') === 'true') {
+        sessionStorage.removeItem('justLoggedIn');
+        
+        // Verificar se já tem biometria
+        checkAndOfferBiometricSetup();
+    }
+    
+    async function checkAndOfferBiometricSetup() {
+        try {
+            const response = await fetch('/biometria/challenge/', {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.allowCredentials || data.allowCredentials.length === 0) {
+                    // Não tem biometria: oferecer cadastro
+                    setupBiometricOffer.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            console.log('Erro ao verificar biometria:', error);
+        }
+    }
+    
+    // Botão de cadastrar biometria agora
+    if (setupBiometricNowBtn) {
+        setupBiometricNowBtn.addEventListener('click', function() {
+            window.location.href = '/biometria/settings/';
+        });
+    }
+    
+    // Função auxiliar para pegar cookie CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+});
+</script>
+{% endblock %}

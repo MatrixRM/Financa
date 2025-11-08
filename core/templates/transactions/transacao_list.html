@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Transações{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2><i class="bi bi-list-ul"></i> Transações</h2>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros</h5>
+        </div>
+        <div class="card-body">
+            {% crispy filtro_form %}
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Total Receitas</h6>
+                    <h3>R$ {{ total_receitas|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6>Total Despesas</h6>
+                    <h3>R$ {{ total_despesas|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card {% if saldo >= 0 %}bg-primary{% else %}bg-warning{% endif %} text-white">
+                <div class="card-body">
+                    <h6>Saldo</h6>
+                    <h3>R$ {{ saldo|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Transações -->
+    <div class="card">
+        <div class="card-body p-2">
+            {% if transacoes %}
+                {% for transacao in transacoes %}
+                <div class="transaction-item">
+                    <div class="transaction-icon {{ transacao.tipo }}">
+                        <i class="{{ transacao.categoria.icone }}"></i>
+                    </div>
+                    <div class="transaction-details flex-grow-1">
+                        <div class="transaction-title">{{ transacao.titulo }}</div>
+                        <div class="transaction-meta">
+                            <span class="badge" style="background-color: {{ transacao.categoria.cor }};">
+                                {{ transacao.categoria.nome }}
+                            </span>
+                            <i class="bi bi-bank"></i> {{ transacao.conta.nome }}
+                            <i class="bi bi-calendar"></i> {{ transacao.data|date:"d/m/Y" }}
+                            {% if transacao.status != 'paga' %}
+                                <span class="badge bg-warning">{{ transacao.get_status_display }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="transaction-value {{ transacao.tipo }} me-3">
+                        {% if transacao.tipo == 'receita' %}+{% else %}-{% endif %}R$ {{ transacao.valor|floatformat:2 }}
+                    </div>
+                    <div class="d-flex gap-1">
+                        <a href="{% url 'transacao_update' transacao.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form method="post" action="{% url 'transacao_delete' transacao.pk %}" 
+                              onsubmit="return confirm('Tem certeza?');" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Paginação -->
+                {% if transacoes.has_other_pages %}
+                <nav class="mt-3">
+                    <ul class="pagination justify-content-center">
+                        {% if transacoes.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ transacoes.previous_page_number }}">Anterior</a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in transacoes.paginator.page_range %}
+                            {% if transacoes.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% else %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if transacoes.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ transacoes.next_page_number }}">Próxima</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-inbox empty-state-icon"></i>
+                    <h3>Nenhuma transação encontrada</h3>
+                    <p>Adicione sua primeira transação ou ajuste os filtros!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

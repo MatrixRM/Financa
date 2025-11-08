@@ -1,0 +1,261 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="mb-4">
+        <h2><i class="bi bi-graph-up"></i> Relatórios Financeiros</h2>
+    </div>
+
+    <div class="row">
+        <!-- Despesas por Categoria -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Despesas por Categoria</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartDespesasCategoria"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receitas por Categoria -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Receitas por Categoria</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartReceitasCategoria"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evolução Mensal -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Evolução Mensal (Últimos 12 Meses)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 400px;">
+                        <canvas id="chartEvolucaoMensal"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Despesas por Conta -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bank"></i> Despesas por Conta</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartDespesasConta"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Despesas por Categoria
+    const ctxDespesas = document.getElementById('chartDespesasCategoria');
+    {% if despesas_categoria %}
+    const despesasLabels = [{% for item in despesas_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const despesasData = [{% for item in despesas_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const despesasColors = [{% for item in despesas_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    new Chart(ctxDespesas, {
+        type: 'pie',
+        data: {
+            labels: despesasLabels,
+            datasets: [{
+                data: despesasData,
+                backgroundColor: despesasColors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% else %}
+    ctxDespesas.parentElement.innerHTML = '<div class="empty-state"><p>Sem dados de despesas</p></div>';
+    {% endif %}
+
+    // Receitas por Categoria
+    const ctxReceitas = document.getElementById('chartReceitasCategoria');
+    {% if receitas_categoria %}
+    const receitasLabels = [{% for item in receitas_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const receitasData = [{% for item in receitas_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const receitasColors = [{% for item in receitas_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    new Chart(ctxReceitas, {
+        type: 'pie',
+        data: {
+            labels: receitasLabels,
+            datasets: [{
+                data: receitasData,
+                backgroundColor: receitasColors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% else %}
+    ctxReceitas.parentElement.innerHTML = '<div class="empty-state"><p>Sem dados de receitas</p></div>';
+    {% endif %}
+
+    // Evolução Mensal
+    const ctxEvolucao = document.getElementById('chartEvolucaoMensal');
+    const evolucaoData = {{ evolucao_mensal|safe }};
+    
+    new Chart(ctxEvolucao, {
+        type: 'bar',
+        data: {
+            labels: evolucaoData.map(item => item.mes),
+            datasets: [
+                {
+                    label: 'Receitas',
+                    data: evolucaoData.map(item => item.receitas),
+                    backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                    borderColor: 'rgba(25, 135, 84, 1)',
+                    borderWidth: 2
+                },
+                {
+                    label: 'Despesas',
+                    data: evolucaoData.map(item => item.despesas),
+                    backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 2
+                },
+                {
+                    label: 'Saldo',
+                    data: evolucaoData.map(item => item.saldo),
+                    type: 'line',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderWidth: 3,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'R$ ' + value.toFixed(2);
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': R$ ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Despesas por Conta
+    const ctxDespesasConta = document.getElementById('chartDespesasConta');
+    {% if despesas_conta %}
+    const contasLabels = [{% for item in despesas_conta %}'{{ item.conta__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const contasData = [{% for item in despesas_conta %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    new Chart(ctxDespesasConta, {
+        type: 'doughnut',
+        data: {
+            labels: contasLabels,
+            datasets: [{
+                data: contasData,
+                backgroundColor: [
+                    '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
+                    '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% else %}
+    ctxDespesasConta.parentElement.innerHTML = '<div class="empty-state"><p>Sem dados de contas</p></div>';
+    {% endif %}
+});
+</script>
+{% endblock %}

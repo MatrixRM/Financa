@@ -1,0 +1,567 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Chat Financeiro - Controle de Despesas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        max-width: 900px;
+        margin: 0 auto;
+        height: calc(100vh - 200px);
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .chat-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-align: center;
+    }
+
+    .chat-header h2 {
+        margin: 0;
+        font-size: 24px;
+    }
+
+    .chat-header p {
+        margin: 5px 0 0;
+        opacity: 0.9;
+        font-size: 14px;
+    }
+
+    .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        background: #f8f9fa;
+    }
+
+    .message {
+        margin-bottom: 15px;
+        display: flex;
+        align-items: flex-start;
+        animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .message.user {
+        flex-direction: row-reverse;
+    }
+
+    .message-bubble {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 18px;
+        word-wrap: break-word;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .message.user .message-bubble {
+        background: #667eea;
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant .message-bubble {
+        background: white;
+        color: #333;
+        border-bottom-left-radius: 4px;
+        border: 1px solid #e1e8ed;
+    }
+
+    .message-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin: 0 10px;
+    }
+
+    .message.user .message-avatar {
+        background: #764ba2;
+        color: white;
+    }
+
+    .message.assistant .message-avatar {
+        background: #f0f0f0;
+        color: #667eea;
+    }
+
+    .transaction-preview {
+        background: #f8f9fa;
+        border-left: 3px solid #667eea;
+        padding: 10px;
+        margin-top: 8px;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+
+    .transaction-preview strong {
+        color: #667eea;
+    }
+
+    .chat-input-area {
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #e1e8ed;
+    }
+
+    .chat-input-form {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+
+    .input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+
+    #message-input {
+        width: 100%;
+        padding: 12px 50px 12px 16px;
+        border: 2px solid #e1e8ed;
+        border-radius: 24px;
+        font-size: 15px;
+        resize: none;
+        max-height: 120px;
+        transition: border-color 0.3s;
+    }
+
+    #message-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .audio-button {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        background: transparent;
+        border: none;
+        color: #667eea;
+        cursor: pointer;
+        font-size: 20px;
+        transition: transform 0.2s;
+    }
+
+    .audio-button:hover {
+        transform: scale(1.1);
+    }
+
+    .audio-button.recording {
+        color: #dc3545;
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .send-button {
+        padding: 12px 24px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 24px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .send-button:hover:not(:disabled) {
+        background: #764ba2;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .typing-indicator {
+        display: none;
+        align-items: center;
+        gap: 5px;
+        padding: 12px 16px;
+    }
+
+    .typing-indicator span {
+        width: 8px;
+        height: 8px;
+        background: #667eea;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite;
+    }
+
+    .typing-indicator span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes bounce {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-10px); }
+    }
+
+    .error-message {
+        background: #fee;
+        color: #c33;
+        padding: 12px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border-left: 3px solid #c33;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>💬 Chat Financeiro</h2>
+            <p>Converse naturalmente sobre suas finanças</p>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            <div class="message assistant">
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">
+                    Olá! Sou seu assistente financeiro. Você pode me dizer sobre seus gastos e receitas de forma natural, 
+                    ou pedir relatórios. Por exemplo:<br><br>
+                    • "Gastei 45 reais no almoço hoje"<br>
+                    • "Recebi 3000 reais de salário"<br>
+                    • "Quanto gastei este mês?"<br>
+                    • "Mostre meus gastos com alimentação"
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-area">
+            <form id="chat-form" class="chat-input-form">
+                {% csrf_token %}
+                <div class="input-wrapper">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Digite sua mensagem ou use o microfone..."
+                        rows="1"
+                    ></textarea>
+                    <button type="button" class="audio-button" id="audio-button" title="Gravar áudio">
+                        🎤
+                    </button>
+                </div>
+                <button type="submit" class="send-button" id="send-button">
+                    Enviar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const chatMessages = document.getElementById('chat-messages');
+const chatForm = document.getElementById('chat-form');
+const messageInput = document.getElementById('message-input');
+const sendButton = document.getElementById('send-button');
+const audioButton = document.getElementById('audio-button');
+
+let conversationContext = [];
+let mediaRecorder = null;
+let audioChunks = [];
+
+// Auto-resize textarea
+messageInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// Enter para enviar (Shift+Enter para nova linha)
+messageInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        chatForm.dispatchEvent(new Event('submit'));
+    }
+});
+
+// Adicionar mensagem ao chat
+function addMessage(text, sender, data = null) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = sender === 'user' ? '👤' : '🤖';
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.textContent = text;
+    
+    // Se houver dados de transação, mostrar preview
+    if (data && data.transaction) {
+        const trans = data.transaction;
+        const preview = document.createElement('div');
+        preview.className = 'transaction-preview';
+        preview.innerHTML = `
+            <strong>${trans.type === 'despesa' ? '💸' : '💰'} ${trans.type.toUpperCase()}</strong><br>
+            Valor: R$ ${trans.amount?.toFixed(2) || '?'}<br>
+            ${trans.category ? `Categoria: ${trans.category}<br>` : ''}
+            ${trans.account ? `Conta: ${trans.account}<br>` : ''}
+            ${trans.date ? `Data: ${new Date(trans.date).toLocaleDateString('pt-BR')}` : ''}
+        `;
+        bubble.appendChild(preview);
+    }
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(bubble);
+    chatMessages.appendChild(messageDiv);
+    
+    // Scroll para o final
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Mostrar indicador de digitação
+function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'message assistant';
+    indicator.id = 'typing-indicator';
+    indicator.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble typing-indicator" style="display: flex;">
+            <span></span><span></span><span></span>
+        </div>
+    `;
+    chatMessages.appendChild(indicator);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) indicator.remove();
+}
+
+// Enviar mensagem
+chatForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const message = messageInput.value.trim();
+    if (!message) return;
+    
+    // Adicionar mensagem do usuário
+    addMessage(message, 'user');
+    
+    // Adicionar ao contexto
+    conversationContext.push({
+        role: 'user',
+        content: message
+    });
+    
+    // Limpar input
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    
+    // Desabilitar envio
+    sendButton.disabled = true;
+    messageInput.disabled = true;
+    
+    showTypingIndicator();
+    
+    try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+        
+        const response = await fetch('/chat/message/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                message: message,
+                context: conversationContext.slice(-10).map(ctx => ({
+                    role: ctx.role,
+                    content: ctx.content
+                }))
+            })
+        });
+        
+        removeTypingIndicator();
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Erro na resposta:', errorData);
+            throw new Error(errorData.error || 'Erro na resposta do servidor');
+        }
+        
+        const data = await response.json();
+        
+        // Adicionar resposta do assistente
+        addMessage(data.assistant_message, 'assistant', data);
+        
+        // Adicionar ao contexto
+        conversationContext.push({
+            role: 'assistant',
+            content: data.assistant_message
+        });
+        
+    } catch (error) {
+        removeTypingIndicator();
+        console.error('Erro completo:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = 'Erro ao processar mensagem: ' + error.message;
+        chatMessages.appendChild(errorDiv);
+    } finally {
+        sendButton.disabled = false;
+        messageInput.disabled = false;
+        messageInput.focus();
+    }
+});
+
+// Gravação de áudio
+audioButton.addEventListener('click', async function() {
+    // Verificar se o navegador suporta gravação de áudio
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('❌ Seu navegador não suporta gravação de áudio.\n\n💡 Tente usar Chrome, Firefox ou Safari atualizado.');
+        return;
+    }
+    
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = (e) => {
+                audioChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                await sendAudioMessage(audioBlob);
+                stream.getTracks().forEach(track => track.stop());
+            };
+            
+            mediaRecorder.start();
+            audioButton.classList.add('recording');
+            audioButton.textContent = '⏹️';
+            
+            // Feedback visual
+            audioButton.style.animation = 'pulse 1.5s infinite';
+        } catch (error) {
+            console.error('Erro ao acessar microfone:', error);
+            
+            let errorMessage = '❌ Não foi possível acessar o microfone.\n\n';
+            
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                errorMessage += '🔒 Permissão negada!\n\n💡 Solução:\n• Clique no ícone de cadeado/câmera na barra de endereço\n• Permita acesso ao microfone\n• Recarregue a página';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage += '🎤 Nenhum microfone encontrado!\n\n💡 Verifique:\n• Microfone conectado?\n• Funciona em outros apps?';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage += '⚠️ Microfone em uso por outro app!\n\n💡 Solução:\n• Feche outros apps usando o microfone\n• Recarregue a página';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage += '⚠️ Formato de áudio não suportado!\n\n💡 Tente outro navegador (Chrome ou Firefox)';
+            } else {
+                errorMessage += `Erro: ${error.message}\n\n💡 Use o campo de texto para digitar sua mensagem`;
+            }
+            
+            alert(errorMessage);
+        }
+    } else {
+        mediaRecorder.stop();
+        audioButton.classList.remove('recording');
+        audioButton.textContent = '🎤';
+        audioButton.style.animation = 'none';
+    }
+});
+
+async function sendAudioMessage(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    
+    // Serializar o contexto como JSON string no FormData
+    const contextData = conversationContext.slice(-10).map(ctx => ({
+        role: ctx.role,
+        content: ctx.content
+    }));
+    formData.append('context', JSON.stringify(contextData));
+    
+    sendButton.disabled = true;
+    messageInput.disabled = true;
+    showTypingIndicator();
+    
+    try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+        
+        const response = await fetch('/chat/message/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        });
+        
+        removeTypingIndicator();
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Erro ao processar áudio:', errorData);
+            throw new Error(errorData.error || 'Erro na resposta');
+        }
+        
+        const data = await response.json();
+        
+        // Mostrar texto transcrito
+        if (data.transcribed_text) {
+            addMessage(data.transcribed_text, 'user');
+            conversationContext.push({
+                role: 'user',
+                content: data.transcribed_text
+            });
+        }
+        
+        // Resposta do assistente
+        addMessage(data.assistant_message, 'assistant', data);
+        conversationContext.push({
+            role: 'assistant',
+            content: data.assistant_message
+        });
+        
+    } catch (error) {
+        removeTypingIndicator();
+        console.error('Erro completo ao processar áudio:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = 'Erro ao processar áudio: ' + error.message;
+        chatMessages.appendChild(errorDiv);
+    } finally {
+        sendButton.disabled = false;
+        messageInput.disabled = false;
+    }
+}
+</script>
+{% endblock %}

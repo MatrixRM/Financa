@@ -1,0 +1,384 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .icon-selector {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    
+    .icon-option {
+        width: 70px;
+        height: 70px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background-color: #fff;
+    }
+    
+    .icon-option:hover {
+        border-color: #0d6efd;
+        background-color: #f8f9fa;
+        transform: scale(1.05);
+    }
+    
+    .icon-option.selected {
+        border-color: #0d6efd;
+        background-color: #0d6efd;
+        color: #fff;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+    }
+    
+    .icon-option i {
+        font-size: 28px;
+    }
+    
+    .icon-option.selected i {
+        color: #fff;
+    }
+    
+    #id_icone {
+        display: none;
+    }
+    
+    .icon-categories {
+        margin-bottom: 1.5rem;
+    }
+    
+    .icon-category-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">{{ title }}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-lightbulb"></i>
+                        <strong>Dica:</strong> Escolha um ícone que represente bem sua categoria. 
+                        Isso facilita a visualização rápida nas listas de transações!
+                    </div>
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Campo Nome -->
+                        <div class="mb-3">
+                            <label for="id_nome" class="form-label">
+                                Nome da Categoria <span class="text-danger">*</span>
+                            </label>
+                            {{ form.nome }}
+                            <div class="form-text">Ex: Alimentação, Transporte, Salário</div>
+                        </div>
+                        
+                        <!-- Campo Tipo -->
+                        <div class="mb-3">
+                            <label for="id_tipo" class="form-label">
+                                Tipo <span class="text-danger">*</span>
+                            </label>
+                            {{ form.tipo }}
+                        </div>
+                        
+                        <!-- Seletor de Ícones -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                Ícone <span class="text-danger">*</span>
+                            </label>
+                            
+                            <div class="icon-categories">
+                                <!-- Alimentação & Compras -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-cart"></i> Alimentação & Compras
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-cart" title="Carrinho de Compras">
+                                        <i class="bi bi-cart"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-bag" title="Sacola de Compras">
+                                        <i class="bi bi-bag"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-cup-hot" title="Café/Restaurante">
+                                        <i class="bi bi-cup-hot"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-basket" title="Cesta/Mercado">
+                                        <i class="bi bi-basket"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-egg-fried" title="Comida">
+                                        <i class="bi bi-egg-fried"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Transporte -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-car-front"></i> Transporte
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-car-front" title="Carro">
+                                        <i class="bi bi-car-front"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-bus-front" title="Ônibus">
+                                        <i class="bi bi-bus-front"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-fuel-pump" title="Combustível">
+                                        <i class="bi bi-fuel-pump"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-bicycle" title="Bicicleta">
+                                        <i class="bi bi-bicycle"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-airplane" title="Avião/Viagem">
+                                        <i class="bi bi-airplane"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Casa & Moradia -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-house"></i> Casa & Moradia
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-house" title="Casa">
+                                        <i class="bi bi-house"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-lightning" title="Energia">
+                                        <i class="bi bi-lightning"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-droplet" title="Água">
+                                        <i class="bi bi-droplet"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-wifi" title="Internet">
+                                        <i class="bi bi-wifi"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-hammer" title="Manutenção">
+                                        <i class="bi bi-hammer"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Saúde & Bem-estar -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-heart-pulse"></i> Saúde & Bem-estar
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-heart-pulse" title="Saúde">
+                                        <i class="bi bi-heart-pulse"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-capsule" title="Medicamentos">
+                                        <i class="bi bi-capsule"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-scissors" title="Salão/Beleza">
+                                        <i class="bi bi-scissors"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-activity" title="Academia/Fitness">
+                                        <i class="bi bi-activity"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-emoji-smile" title="Lazer">
+                                        <i class="bi bi-emoji-smile"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Educação & Trabalho -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-book"></i> Educação & Trabalho
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-book" title="Educação">
+                                        <i class="bi bi-book"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-briefcase" title="Trabalho">
+                                        <i class="bi bi-briefcase"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-laptop" title="Equipamentos">
+                                        <i class="bi bi-laptop"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-wallet2" title="Salário">
+                                        <i class="bi bi-wallet2"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-piggy-bank" title="Investimentos">
+                                        <i class="bi bi-piggy-bank"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Lazer & Entretenimento -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-controller"></i> Lazer & Entretenimento
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-controller" title="Games">
+                                        <i class="bi bi-controller"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-film" title="Cinema/Streaming">
+                                        <i class="bi bi-film"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-music-note-beamed" title="Música">
+                                        <i class="bi bi-music-note-beamed"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-camera" title="Fotografia">
+                                        <i class="bi bi-camera"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-gift" title="Presentes">
+                                        <i class="bi bi-gift"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Comunicação -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-phone"></i> Comunicação
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-phone" title="Telefone">
+                                        <i class="bi bi-phone"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-envelope" title="Correspondência">
+                                        <i class="bi bi-envelope"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-chat-dots" title="Mensagens">
+                                        <i class="bi bi-chat-dots"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-newspaper" title="Assinaturas">
+                                        <i class="bi bi-newspaper"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-cloud" title="Cloud/Serviços">
+                                        <i class="bi bi-cloud"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Outros -->
+                                <div class="icon-category-title">
+                                    <i class="bi bi-three-dots"></i> Outros
+                                </div>
+                                <div class="icon-grid">
+                                    <div class="icon-option" data-icon="bi-star" title="Favorito">
+                                        <i class="bi bi-star"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-tag" title="Geral">
+                                        <i class="bi bi-tag"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-credit-card" title="Cartão">
+                                        <i class="bi bi-credit-card"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-cash-coin" title="Dinheiro">
+                                        <i class="bi bi-cash-coin"></i>
+                                    </div>
+                                    <div class="icon-option" data-icon="bi-question-circle" title="Diversos">
+                                        <i class="bi bi-question-circle"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Campo oculto que receberá o valor -->
+                            {{ form.icone }}
+                            
+                            <div class="form-text">
+                                <span id="icon-selected-text" class="text-muted">
+                                    Selecione um ícone acima
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Campo Cor -->
+                        <div class="mb-3">
+                            <label for="id_cor" class="form-label">
+                                Cor de Identificação <span class="text-danger">*</span>
+                            </label>
+                            {{ form.cor }}
+                            <div class="form-text">
+                                Escolha uma cor para identificar facilmente esta categoria
+                            </div>
+                        </div>
+                        
+                        <!-- Campo Ativa -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.ativa }}
+                                <label class="form-check-label" for="id_ativa">
+                                    Categoria Ativa?
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Botões -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg"></i> Salvar
+                            </button>
+                            <a href="{% url 'categoria_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-lg"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const iconOptions = document.querySelectorAll('.icon-option');
+        const iconInput = document.getElementById('id_icone');
+        const iconSelectedText = document.getElementById('icon-selected-text');
+        
+        // Se já houver um valor selecionado (edição), destacar
+        const currentIcon = iconInput.value;
+        if (currentIcon) {
+            const selectedOption = document.querySelector(`.icon-option[data-icon="${currentIcon}"]`);
+            if (selectedOption) {
+                selectedOption.classList.add('selected');
+                updateSelectedText(currentIcon, selectedOption.title);
+            }
+        }
+        
+        // Adicionar evento de clique em cada ícone
+        iconOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                // Remover seleção anterior
+                iconOptions.forEach(opt => opt.classList.remove('selected'));
+                
+                // Adicionar seleção atual
+                this.classList.add('selected');
+                
+                // Atualizar valor do campo oculto
+                const iconClass = this.getAttribute('data-icon');
+                iconInput.value = iconClass;
+                
+                // Atualizar texto de feedback
+                updateSelectedText(iconClass, this.title);
+            });
+        });
+        
+        function updateSelectedText(iconClass, iconName) {
+            iconSelectedText.innerHTML = `
+                <i class="${iconClass} me-1"></i>
+                <strong>Ícone selecionado:</strong> ${iconName} (${iconClass})
+            `;
+            iconSelectedText.classList.remove('text-muted');
+            iconSelectedText.classList.add('text-success');
+        }
+    });
+</script>
+{% endblock %}
