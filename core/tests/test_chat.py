@@ -216,8 +216,8 @@ class ChatIntegrationTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data['clarification_needed'])
-        # Deve criar transação mesmo sem valor
-        self.assertTrue(data.get('transaction_saved', False))
+        # NÃO deve criar transação sem valor (validação amount > 0)
+        self.assertFalse(data.get('transaction_saved', False))
         
     def test_chat_history_api(self):
         """Teste: API de histórico do chat."""
