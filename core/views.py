@@ -991,11 +991,25 @@ def save_chat_transaction(user, transaction_data, original_message):
         defaults={'tipo': tipo_categoria, 'cor': '#6c757d', 'icone': '💰', 'ativa': True}
     )
     
-    # Processar data - SEMPRE usar a data atual no timezone correto (Brasil)
+    # Processar data - usar a data fornecida pela IA ou a data atual se não informada
     from zoneinfo import ZoneInfo
+    from datetime import datetime as dt_datetime
     tz_br = ZoneInfo('America/Sao_Paulo')
-    data_transacao = timezone.now().astimezone(tz_br).date()
-    logger.info(f"Data da transação definida como data atual (timezone BR): {data_transacao}")
+    
+    # Tentar obter a data do transaction_data (formato ISO: YYYY-MM-DD)
+    date_str = transaction_data.get('date')
+    if date_str:
+        try:
+            # Parse da data ISO fornecida pela IA
+            data_transacao = dt_datetime.fromisoformat(date_str).date()
+            logger.info(f"Data obtida da IA: {data_transacao}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Erro ao converter data '{date_str}': {e}. Usando data atual.")
+            data_transacao = timezone.now().astimezone(tz_br).date()
+    else:
+        # Se não houver data, usar data atual
+        data_transacao = timezone.now().astimezone(tz_br).date()
+        logger.info(f"Nenhuma data fornecida, usando data atual (timezone BR): {data_transacao}")
     
     # Criar a transação
     transacao = Transacao.objects.create(
