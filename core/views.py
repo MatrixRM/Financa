@@ -1094,6 +1094,64 @@ def update_chat_transaction(transaction_id, user, transaction_data, original_mes
     return transacao
 
 
+def search_transactions(user, criteria):
+    """
+    Busca transações baseado em critérios fornecidos.
+    Retorna QuerySet de transações que correspondem aos critérios.
+    """
+    from datetime import datetime as dt_datetime
+    
+    if not user.casa:
+        return Transacao.objects.none()
+    
+    # Começar com todas as transações do usuário
+    queryset = Transacao.objects.filter(casa=user.casa)
+    
+    # Filtrar por categoria
+    if criteria.get('category'):
+        queryset = queryset.filter(categoria__nome__icontains=criteria['category'])
+    
+    # Filtrar por conta
+    if criteria.get('account'):
+        queryset = queryset.filter(conta__nome__icontains=criteria['account'])
+    
+    # Filtrar por data
+    if criteria.get('date'):
+        try:
+            date_obj = dt_datetime.fromisoformat(criteria['date']).date()
+            queryset = queryset.filter(data=date_obj)
+        except (ValueError, TypeError):
+            pass
+    
+    # Filtrar por valor (range)
+    if criteria.get('min_amount'):
+        queryset = queryset.filter(valor__gte=criteria['min_amount'])
+    if criteria.get('max_amount'):
+        queryset = queryset.filter(valor__lte=criteria['max_amount'])
+    
+    # Filtrar por título/descrição
+    if criteria.get('title_contains'):
+        queryset = queryset.filter(titulo__icontains=criteria['title_contains'])
+    
+    # Ordenar por data (mais recentes primeiro)
+    queryset = queryset.order_by('-data', '-id')
+    
+    # Limitar a 10 resultados
+    return queryset[:10]
+
+
+def format_transaction_preview(transacao):
+    """Formata uma transação para exibição no chat."""
+    icone = '💸' if transacao.tipo == 'despesa' else '💰'
+    return (
+        f"{icone} {transacao.tipo.upper()}\n"
+        f"Valor: R$ {transacao.valor:.2f}\n"
+        f"Categoria: {transacao.categoria.nome}\n"
+        f"Conta: {transacao.conta.nome}\n"
+        f"Data: {transacao.data.strftime('%d/%m/%Y')}"
+    )
+
+
 def save_chat_history(user, user_message, assistant_response, intent, transcribed_text=None):
     """Salva o histórico de conversação do chat."""
     from core.models import ChatHistory
@@ -1216,6 +1274,44 @@ def chat_message_view(request):
                     logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
                     parsed_response['transaction_saved'] = False
                     parsed_response['save_error'] = str(e)
+        
+        # Se a intenção for editar transação existente
+        elif intent == 'edit_transaction':
+            search_criteria = parsed_response.get('search_criteria', {})
+            transaction_data = parsed_response.get('transaction', {})
+            
+            if request.user.is_authenticated and not needs_clarification:
+                try:
+                    # Buscar transações que correspondam aos critérios
+                    found_transactions = search_transactions(
+                        user=request.user,
+                        criteria=search_criteria
+                    )
+                    
+                    if len(found_transactions) == 0:
+                        parsed_response['assistant_message'] = "Não encontrei nenhuma transação com esses critérios. Pode tentar com outras informações?"
+                        parsed_response['clarification_needed'] = True
+                    elif len(found_transactions) == 1:
+                        # Atualizar a transação encontrada
+                        saved_transaction = update_chat_transaction(
+                            transaction_id=found_transactions[0].id,
+                            user=request.user,
+                            transaction_data=transaction_data,
+                            original_message=message_text
+                        )
+                        parsed_response['transaction_id'] = saved_transaction.id
+                        parsed_response['transaction_saved'] = True
+                        parsed_response['assistant_message'] = f"✅ Transação atualizada com sucesso!\n\n" + format_transaction_preview(saved_transaction)
+                    else:
+                        # Múltiplas transações encontradas
+                        trans_list = "\n".join([f"• {t.data.strftime('%d/%m')} - {t.categoria.nome} - R$ {t.valor:.2f}" for t in found_transactions[:5]])
+                        parsed_response['assistant_message'] = f"Encontrei {len(found_transactions)} transações com esses critérios:\n\n{trans_list}\n\nPor favor, seja mais específico (mencione a data exata, por exemplo)."
+                        parsed_response['clarification_needed'] = True
+                        
+                except Exception as e:
+                    logger_chat.error(f"Erro ao buscar/editar transação: {e}")
+                    parsed_response['assistant_message'] = f"Erro ao processar edição: {str(e)}"
+                    parsed_response['clarification_needed'] = True
 
         # Salvar histórico do chat
         if request.user.is_authenticated:

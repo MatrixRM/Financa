@@ -30,6 +30,7 @@ class OpenAIClient:
                     "type": "string",
                     "enum": [
                         "create_transaction",
+                        "edit_transaction",
                         "query_summary",
                         "greeting",
                         "clarification",
@@ -83,6 +84,38 @@ class OpenAIClient:
                         "notes": {
                             "type": "string",
                             "description": "Observações adicionais relevantes.",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+                "search_criteria": {
+                    "type": "object",
+                    "description": "Critérios de busca quando o usuário quer editar uma transação existente.",
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "description": "Nome da categoria da transação a editar.",
+                        },
+                        "account": {
+                            "type": "string",
+                            "description": "Nome da conta da transação a editar.",
+                        },
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Data da transação a editar (ISO YYYY-MM-DD).",
+                        },
+                        "min_amount": {
+                            "type": "number",
+                            "description": "Valor mínimo para busca.",
+                        },
+                        "max_amount": {
+                            "type": "number",
+                            "description": "Valor máximo para busca.",
+                        },
+                        "title_contains": {
+                            "type": "string",
+                            "description": "Palavras que devem estar no título/descrição.",
                         },
                     },
                     "additionalProperties": False,
@@ -155,14 +188,21 @@ class OpenAIClient:
         return (
             f"Você é um assistente financeiro em português do Brasil. Data atual: {hoje} (ISO: {hoje_iso}). "
             "Seu trabalho é interpretar mensagens naturais do usuário sobre finanças pessoais e SEMPRE responder em JSON seguindo o schema fornecido. "
-            "Você deve decidir entre duas ações: (1) registrar uma NOVA TRANSAÇÃO ou (2) criar um PEDIDO DE RELATÓRIO.\n\n"
+            "Você deve decidir entre três ações: (1) registrar uma NOVA TRANSAÇÃO, (2) EDITAR uma transação existente, ou (3) criar um PEDIDO DE RELATÓRIO.\n\n"
 
-            "REGRAS PARA NOVAS TRANSAÇÕES:\n"
+            "REGRAS PARA NOVAS TRANSAÇÕES (intent: create_transaction):\n"
             "- Reconheça frases que indiquem gasto (ex: paguei, comprei, gastei) como 'despesa'.\n"
             "- Reconheça frases que indiquem entrada (ex: recebi, entrou, salário) como 'receita'.\n"
             "- O valor deve ser sempre numérico e positivo.\n"
             "- Inferir categoria e conta quando possível, com base no contexto.\n"
             "- Se o usuário der informações insuficientes (valor, descrição, etc.), marque 'clarification_needed': true.\n\n"
+
+            "REGRAS PARA EDIÇÃO DE TRANSAÇÕES (intent: edit_transaction):\n"
+            "- Reconheça verbos como: editar, alterar, mudar, corrigir, atualizar, modificar.\n"
+            "- Preencha 'search_criteria' com os dados mencionados para ENCONTRAR a transação (categoria, data, conta, valor aproximado).\n"
+            "- Preencha 'transaction' APENAS com os campos que o usuário quer ALTERAR (novo valor, nova categoria, etc.).\n"
+            "- Exemplo: 'Edite a transação de pintura para 350 reais' → search_criteria: {category: 'pintura'}, transaction: {amount: 350}\n"
+            "- Se faltar informação para localizar a transação, marque 'clarification_needed': true e pergunte detalhes (data, conta, etc.).\n\n"
 
             "REGRAS DE DATA (CRÍTICO):\n"
             f"- Se o usuário NÃO informar data, use OBRIGATORIAMENTE: {hoje_iso}.\n"
@@ -172,7 +212,7 @@ class OpenAIClient:
             "- Datas específicas devem ser convertidas para ISO (YYYY-MM-DD).\n"
             "- Nunca invente datas além dessas regras.\n\n"
 
-            "REGRAS PARA RELATÓRIOS:\n"
+            "REGRAS PARA RELATÓRIOS (intent: query_summary):\n"
             "- Quando identificado pedido de resumo, extrato, total do mês, total por categoria, etc., preencha o campo 'query'.\n"
             "- Especifique o tipo de relatório e o período, se puder inferir.\n\n"
 
