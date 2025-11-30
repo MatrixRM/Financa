@@ -195,7 +195,11 @@ class OpenAIClient:
             "- Reconheça frases que indiquem entrada (ex: recebi, entrou, salário) como 'receita'.\n"
             "- O valor deve ser sempre numérico e positivo.\n"
             "- Inferir categoria e conta quando possível, com base no contexto.\n"
-            "- Se o usuário der informações insuficientes (valor, descrição, etc.), marque 'clarification_needed': true.\n\n"
+            "- Se o usuário der informações insuficientes (valor, descrição, etc.), marque 'clarification_needed': true.\n"
+            "- IMPORTANTE: Se você pediu esclarecimento e o usuário respondeu (ex: você pediu categoria e ele disse 'mercado'), "
+            "COMPLETE a transação usando os dados anteriores + a resposta nova. NÃO peça esclarecimento novamente!\n"
+            "- Exemplo: User: 'gastei 20 reais' → Assistant pede categoria → User: 'mercado' → "
+            "REGISTRE: amount=20, category='mercado', clarification_needed=false\n\n"
 
             "REGRAS PARA EDIÇÃO DE TRANSAÇÕES (intent: edit_transaction):\n"
             "- Reconheça verbos como: editar, alterar, mudar, corrigir, atualizar, modificar.\n"
@@ -221,6 +225,10 @@ class OpenAIClient:
             "- NUNCA inclua explicações fora do JSON.\n"
             "- Não adivinhe informações críticas.\n"
             "- Trabalhe sempre com base na data fornecida acima.\n"
+            "- CONTEXTO É FUNDAMENTAL: Ao receber o histórico da conversa (context), use as mensagens anteriores para completar informações.\n"
+            "- Se a última mensagem do assistant pediu algo (ex: 'qual categoria?') e o user respondeu com palavra única (ex: 'mercado'), "
+            "interprete como resposta ao que foi perguntado e COMPLETE a ação original.\n"
+            "- Respostas curtas como 'mercado', 'cartão', 'alimentação' são geralmente complementos da transação anterior.\n"
         )
 
     def __init__(self) -> None:
