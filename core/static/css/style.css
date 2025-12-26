@@ -293,40 +293,114 @@ body {
 /* ===========================
    Auth Pages
    =========================== */
+
 .auth-container {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 30px 0; /* evita que o card fique colado no topo em alguns navegadores */
 }
 
 .auth-card {
-    max-width: 480px;
+    max-width: 480px; /* restaurado para largura mais confortável */
     width: 100%;
-    margin: 1rem;
+    margin: 1rem auto;
 }
 
 .auth-card .card {
     border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+    transition: none; /* sem hover agressivo */
+}
+
+/* Evitar uso global de !important que quebrou transições internas */
+.auth-card, .auth-card .card {
+    /* manter override local, mas sem afetar todos os filhos */
+    transition: none;
 }
 
 .auth-header {
     text-align: center;
-    padding: 2rem 2rem 1rem;
+    padding: 1.25rem 1.25rem 0.5rem;
 }
 
 .auth-header h1 {
-    font-size: 1.75rem;
+    font-size: 1.45rem;
     font-weight: 700;
     color: #212529;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
 }
 
 .auth-header p {
     color: #6c757d;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
+}
+
+/* Biometric button wrapper */
+.biometric-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+/* Biometric button (global fallback) */
+.biometric-btn {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 2.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.25);
+    transition: transform 0.12s ease;
+}
+
+.biometric-btn:active { transform: scale(0.98); }
+
+/* Ajustes do divisor "ou use sua senha" */
+.alternative-login {
+    text-align: center;
+    margin: 1rem 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+    position: relative;
+}
+.alternative-login::before,
+.alternative-login::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 38%;
+    height: 1px;
+    background: #e9ecef;
+}
+.alternative-login::before { left: 4%; }
+.alternative-login::after { right: 4%; }
+
+/* Inputs e botões no card */
+.card .form-control {
+    border-radius: 8px;
+    padding: 0.65rem 0.9rem;
+}
+.card .btn-primary {
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+}
+
+/* Responsividade: reduzir espaços verticalmente em telas menores */
+@media (max-width: 420px) {
+    .auth-card { margin: 0.5rem; }
+    .auth-header { padding-top: 1rem; }
+    .biometric-btn { width: 96px; height: 96px; font-size: 1.9rem; }
 }
 
 /* ===========================

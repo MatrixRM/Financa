@@ -1,4 +1,5 @@
 import json
+import re
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -278,7 +279,19 @@ class OpenAIClient:
                             aggregated_text += str(text_value)
 
         if aggregated_text:
-            return aggregated_text
+            # Limpar possíveis fences de Markdown e texto adicional.
+            text = aggregated_text.strip()
+            # Remover code fences ```json ``` e ```
+            text = re.sub(r"```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"\s*```$", "", text)
+
+            # Tentar extrair o primeiro objeto JSON completo ({ ... }) presente no texto.
+            m = re.search(r"(\{.*\})", text, flags=re.DOTALL)
+            if m:
+                return m.group(1).strip()
+
+            # Se não encontrar objeto JSON, retornar o texto limpo para tentativa de parse.
+            return text
 
         raise ValueError("Não foi possível extrair o texto do JSON retornado pela OpenAI.")
 

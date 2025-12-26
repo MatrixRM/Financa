@@ -119,7 +119,7 @@ Para publicar gratuitamente com HTTPS (necessário para microfone e biometria):
 - ✅ Casa compartilhada (multiusuário)
 - ✅ Interface responsiva (mobile-first)
 - ✅ Autocomplete e sugestões inteligentes
-- ✅ Atalhos de teclado (Alt+N, Ctrl+S)
+
 
 ## 🎯 Como usar o Chat
 

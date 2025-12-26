@@ -161,7 +161,7 @@ def main():
     print("\n💡 Próximos passos:")
     print("  1. Se a IA não está identificando corretamente, ajustar o prompt")
     print("  2. Se a transação não está sendo salva, verificar a view")
-    print("  3. Executar testes automatizados: python manage.py test core.tests.test_chat")
+    print("  3. Executar testes automatizados: python manage.py test core.tests_core.test_chat")
     print("="*80 + "\n")
 
 

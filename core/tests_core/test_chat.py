@@ -415,7 +415,7 @@ def run_diagnostic_tests():
     
     # Executar testes
     runner = DiscoverRunner(verbosity=2)
-    failures = runner.run_tests(['core.tests.test_chat'])
+    failures = runner.run_tests(['core.tests_core.test_chat'])
     
     # Restaurar stdout
     output = sys.stdout.getvalue()

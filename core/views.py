@@ -973,7 +973,7 @@ def biometria_delete_view(request, credencial_id):
 # Views de Chat Financeiro
 # ===========================
 
-def save_chat_transaction(user, transaction_data, original_message):
+def save_chat_transaction(user, transaction_data, original_message, status='paga'):
     """Salva uma transação criada via chat no banco de dados."""
     from datetime import datetime
     from decimal import Decimal
@@ -1021,7 +1021,40 @@ def save_chat_transaction(user, transaction_data, original_message):
         data_transacao = timezone.now().astimezone(tz_br).date()
         logger.info(f"Nenhuma data fornecida, usando data atual (timezone BR): {data_transacao}")
     
-    # Criar a transação
+    # Se estamos criando uma transação definitiva, tentar unir com
+    # uma transação pendente similar (mesmo valor/data) para evitar duplicação.
+    if status == 'paga':
+        try:
+            from datetime import timedelta
+            from django.utils import timezone as dj_timezone
+
+            cutoff = dj_timezone.now() - timedelta(days=2)
+            amount_val = Decimal(str(transaction_data.get('amount', 0)))
+
+            similar = Transacao.objects.filter(
+                casa=user.casa,
+                valor=amount_val,
+                data=data_transacao,
+                status='pendente',
+                criada_em__gte=cutoff
+            ).order_by('-criada_em')
+
+            if similar.exists():
+                transacao = similar.first()
+                transacao.conta = conta
+                transacao.categoria = categoria
+                transacao.tipo = tipo_transacao
+                transacao.titulo = transaction_data.get('title', original_message[:100])
+                transacao.observacao = transaction_data.get('notes', f'Atualizado via chat: {original_message}')
+                transacao.pago_por = user
+                transacao.status = 'paga'
+                transacao.save()
+                logger.info(f"Transação pendente atualizada para paga: ID {transacao.id}")
+                return transacao
+        except Exception as e:
+            logger.warning(f"Erro ao tentar unir com transação pendente: {e}")
+
+    # Criar a transação normalmente
     transacao = Transacao.objects.create(
         casa=user.casa,
         conta=conta,
@@ -1032,9 +1065,9 @@ def save_chat_transaction(user, transaction_data, original_message):
         data=data_transacao,
         observacao=transaction_data.get('notes', f'Criado via chat: {original_message}'),
         pago_por=user,
-        status='paga'
+        status=status
     )
-    
+
     return transacao
 
 
@@ -1097,7 +1130,11 @@ def update_chat_transaction(transaction_id, user, transaction_data, original_mes
     else:
         # Adicionar nota de edição
         transacao.observacao = f"{transacao.observacao}\nEditado via chat: {original_message}"
-    
+
+    # Se era pendente, ao atualizar via chat assumimos que agora está definitiva
+    if transacao.status == 'pendente':
+        transacao.status = 'paga'
+
     transacao.save()
     logger.info(f"Transação {transaction_id} atualizada com sucesso")
     
@@ -1353,9 +1390,9 @@ def chat_message_view(request):
                 
                 if has_required_data and request.user.is_authenticated:
                     try:
-                        # Verificar se há um transaction_id no contexto (para edição)
-                        pending_transaction_id = request.data.get('pending_transaction_id')
-                        
+                        # Usar o valor validado para pending_transaction_id (se enviado pelo frontend)
+                        pending_transaction_id = validated_data.get('pending_transaction_id')
+
                         if pending_transaction_id:
                             # Editar transação existente
                             saved_transaction = update_chat_transaction(
@@ -1365,22 +1402,66 @@ def chat_message_view(request):
                                 original_message=message_text
                             )
                             logger_chat.info(f"Transação {saved_transaction.id} atualizada com sucesso")
+                            parsed_response['transaction_id'] = saved_transaction.id
+                            parsed_response['transaction_saved'] = True
+
                         else:
-                            # Criar nova transação
-                            saved_transaction = save_chat_transaction(
-                                user=request.user,
-                                transaction_data=transaction_data,
-                                original_message=message_text
-                            )
-                            logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
-                        
-                        parsed_response['transaction_id'] = saved_transaction.id
-                        parsed_response['transaction_saved'] = True
-                        
-                        # Se precisar de esclarecimento, indicar que a transação está pendente
-                        if needs_clarification:
-                            parsed_response['transaction_pending'] = True
-                            
+                            # Se a IA pediu esclarecimento, criar registro pendente ao invés de definitivo
+                            if needs_clarification:
+                                saved_transaction = save_chat_transaction(
+                                    user=request.user,
+                                    transaction_data=transaction_data,
+                                    original_message=message_text,
+                                    status='pendente'
+                                )
+                                logger_chat.info(f"Transação pendente criada: ID {saved_transaction.id}")
+                                parsed_response['transaction_id'] = saved_transaction.id
+                                parsed_response['transaction_pending'] = True
+                                parsed_response['transaction_saved'] = False
+                            else:
+                                # Tentar encontrar uma transação 'pendente' recente do mesmo usuário
+                                # e atualizá-la quando o frontend não enviou `pending_transaction_id`.
+                                fallback_updated = None
+                                try:
+                                    from datetime import timedelta
+                                    from django.utils import timezone as dj_timezone
+
+                                    cutoff = dj_timezone.now() - timedelta(days=2)
+                                    pend_qs = Transacao.objects.filter(
+                                        casa=request.user.casa,
+                                        pago_por=request.user,
+                                        status='pendente',
+                                        criada_em__gte=cutoff
+                                    ).order_by('-criada_em')
+
+                                    if pend_qs.exists():
+                                        candidate = pend_qs.first()
+                                        # Atualizar o candidato com os dados recebidos
+                                        saved_candidate = update_chat_transaction(
+                                            transaction_id=candidate.id,
+                                            user=request.user,
+                                            transaction_data=transaction_data,
+                                            original_message=message_text
+                                        )
+                                        fallback_updated = saved_candidate
+                                        logger_chat.info(f"Transação pendente encontrada e atualizada: ID {saved_candidate.id}")
+                                except Exception as e:
+                                    logger_chat.warning(f"Erro ao tentar fallback update de pendente: {e}")
+
+                                if fallback_updated:
+                                    parsed_response['transaction_id'] = fallback_updated.id
+                                    parsed_response['transaction_saved'] = True
+                                else:
+                                    # Criar nova transação definitiva
+                                    saved_transaction = save_chat_transaction(
+                                        user=request.user,
+                                        transaction_data=transaction_data,
+                                        original_message=message_text,
+                                        status='paga'
+                                    )
+                                    logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
+                                    parsed_response['transaction_id'] = saved_transaction.id
+                                    parsed_response['transaction_saved'] = True
                     except Exception as e:
                         logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
                         parsed_response['transaction_saved'] = False

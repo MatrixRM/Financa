@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" translate="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
     <title>{% block title %}Controle de Despesas{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
@@ -120,7 +121,7 @@
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#quickTransacaoModal">
-                <i class="bi bi-lightning-charge text-warning"></i> <strong>Transação Rápida</strong> (Alt+N)
+                <i class="bi bi-lightning-charge text-warning"></i> <strong>Transação Rápida</strong>
             </a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{% url 'conta_create' %}">
@@ -139,7 +140,7 @@
     <!-- Footer -->
     <footer class="bg-light text-center text-muted py-3 mt-5">
         <div class="container">
-            <p class="mb-0">© 2025 Controle de Despesas - Desenvolvido com ❤️</p>
+            <p class="mb-0">© 2025 Controle de Despesas</p>
         </div>
     </footer>
 
