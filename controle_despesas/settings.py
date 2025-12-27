@@ -187,9 +187,9 @@ OPENAI_TRANSCRIPTION_MODEL = config('OPENAI_TRANSCRIPTION_MODEL', default='whisp
 OPENAI_CHAT_MAX_HISTORY = config('OPENAI_CHAT_MAX_HISTORY', default=8, cast=int)
 
 # Email / SMTP settings
-# Use SMTP backend when EMAIL_HOST is provided; fall back to console backend in DEBUG
-DEFAULT_EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_BACKEND = config('EMAIL_BACKEND', default=DEFAULT_EMAIL_BACKEND)
+# Console backend por padrão (PythonAnywhere bloqueia SMTP em contas gratuitas)
+# Para enviar emails reais, configure EMAIL_BACKEND no arquivo .env para 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
@@ -199,5 +199,7 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
 
-# Nota: Para usar Gmail/Google Workspace com SMTP, talvez seja necessário configurar senha de app
-# ou autenticação adequada no provedor de e-mail. Não comitar credenciais no repositório.
+# Nota: Para usar Gmail/Google Workspace com SMTP, configure:
+# 1. EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend' no .env
+# 2. EMAIL_HOST_USER e EMAIL_HOST_PASSWORD com senha de app do Gmail
+# 3. Em contas gratuitas do PythonAnywhere, SMTP externo é bloqueado

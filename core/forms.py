@@ -1,11 +1,9 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordResetForm
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Submit, Row, Column, Div, HTML
 from .models import Usuario, Casa, Conta, Categoria, Transacao
 from django.db.models import Q
-from django.core.exceptions import ValidationError
 
 
 class RegistroForm(UserCreationForm):
