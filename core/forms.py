@@ -1,8 +1,11 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth.forms import PasswordResetForm
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Submit, Row, Column, Div, HTML
 from .models import Usuario, Casa, Conta, Categoria, Transacao
+from django.db.models import Q
+from django.core.exceptions import ValidationError
 
 
 class RegistroForm(UserCreationForm):
@@ -382,6 +385,51 @@ class TransacaoForm(forms.ModelForm):
             instance.save()
             self.save_m2m()  # Salvar relações many-to-many
         return instance
+
+
+class FiltroTransacaoForm(forms.Form):
+    """Formulário de filtros para transações"""
+    data_inicio = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label='Data Início')
+    data_fim = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label='Data Fim')
+    tipo = forms.ChoiceField(
+        choices=[('', 'Todos')] + Transacao.TIPO_CHOICES,
+        required=False,
+        label='Tipo'
+    )
+    categoria = forms.ModelChoiceField(
+        queryset=Categoria.objects.none(),
+        required=False,
+        label='Categoria'
+    )
+
+
+class CustomPasswordResetForm(PasswordResetForm):
+    """Permite buscar usuário por email ou username ao solicitar redefinição.
+
+    Uso: enviar o username ou email no campo 'email' do formulário padrão.
+    """
+    def get_users(self, email):
+        """Procurar por email exato (case-insensitive) ou username"""
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        email = email.strip()
+        if not email:
+            return UserModel._default_manager.none()
+        # Buscar por email ou username, apenas usuários ativos
+        return UserModel._default_manager.filter(
+            Q(email__iexact=email) | Q(username__iexact=email),
+            is_active=True
+        )
+    
+    def clean_email(self):
+        """Validar se o email/username existe antes de prosseguir"""
+        email = self.cleaned_data.get('email', '').strip()
+        users = list(self.get_users(email))
+        if not users:
+            raise forms.ValidationError(
+                'Email ou usuário não cadastrado. Verifique os dados e tente novamente.'
+            )
+        return email
 
 
 class FiltroTransacaoForm(forms.Form):
