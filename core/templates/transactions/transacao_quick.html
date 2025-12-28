@@ -32,10 +32,7 @@
                             <i class="bi bi-pencil"></i> Descrição <span class="text-danger">*</span>
                         </label>
                         <input type="text" class="form-control" id="quick_titulo" name="titulo" required 
-                               list="quick-titulos" placeholder="Digite a descrição...">
-                        <datalist id="quick-titulos">
-                            <!-- Populado via JavaScript -->
-                        </datalist>
+                               placeholder="Ex: Almoço, Mercado, Gasolina..." maxlength="200" autocomplete="off">
                     </div>
                     
                     <!-- Valor -->
@@ -43,8 +40,12 @@
                         <label for="quick_valor" class="form-label">
                             <i class="bi bi-cash"></i> Valor (R$) <span class="text-danger">*</span>
                         </label>
-                        <input type="number" class="form-control" id="quick_valor" name="valor" 
-                               required step="0.01" min="0.01" placeholder="0,00">
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control" id="quick_valor" name="valor" 
+                                   required placeholder="0,00" inputmode="decimal" autocomplete="off">
+                        </div>
+                        <small class="form-text text-muted">Use vírgula ou ponto para decimais</small>
                     </div>
                     
                     <!-- Categoria -->
@@ -112,10 +113,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusGroup = document.getElementById('statusGroup');
     const dataInput = document.getElementById('quick_data');
     const btnSalvar = document.getElementById('btnSalvarQuick');
+    const valorInput = document.getElementById('quick_valor');
     
     // Definir data de hoje
     const hoje = new Date().toISOString().split('T')[0];
     dataInput.value = hoje;
+    
+    // Formatar input de valor para moeda brasileira
+    valorInput.addEventListener('input', function(e) {
+        let valor = e.target.value;
+        // Remove tudo exceto números, vírgula e ponto
+        valor = valor.replace(/[^\d.,]/g, '');
+        // Substitui vírgula por ponto para processamento
+        valor = valor.replace(',', '.');
+        e.target.value = valor;
+    });
+    
+    // Validar valor antes de enviar
+    form.addEventListener('submit', function(e) {
+        const valorStr = valorInput.value.replace(',', '.');
+        const valorNum = parseFloat(valorStr);
+        
+        if (isNaN(valorNum) || valorNum <= 0) {
+            e.preventDefault();
+            alert('Por favor, insira um valor válido maior que zero.');
+            valorInput.focus();
+            return false;
+        }
+        
+        // Garantir que o valor está no formato correto
+        valorInput.value = valorNum.toFixed(2);
+    });
     
     // Filtrar categorias por tipo e ocultar/mostrar status
     function atualizarFormulario() {
@@ -123,16 +151,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const options = categoriaSelect.querySelectorAll('option[data-tipo]');
         
         // Filtrar categorias
+        let primeiraOpcaoValida = null;
         options.forEach(option => {
             if (option.dataset.tipo === tipoSelecionado) {
                 option.style.display = 'block';
+                if (!primeiraOpcaoValida) primeiraOpcaoValida = option;
             } else {
                 option.style.display = 'none';
             }
         });
         
-        // Resetar seleção
+        // Selecionar primeira categoria válida se existir
         categoriaSelect.value = '';
+        if (primeiraOpcaoValida) {
+            categoriaSelect.value = primeiraOpcaoValida.value;
+        }
         
         // Ocultar/mostrar campo de status
         if (tipoSelecionado === 'receita') {
@@ -161,15 +194,10 @@ document.addEventListener('DOMContentLoaded', function() {
     modal.addEventListener('hidden.bs.modal', function() {
         form.reset();
         dataInput.value = hoje;
+        atualizarFormulario();
     });
     
-    // Atalho de teclado: Alt + N para abrir modal
-    document.addEventListener('keydown', function(e) {
-        if (e.altKey && e.key === 'n') {
-            e.preventDefault();
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
-    });
+    // Inicializar
+    atualizarFormulario();
 });
 </script>

@@ -5,29 +5,171 @@
 {% block content %}
 <div class="container">
     <div class="row">
-        <div class="col-lg-6 mx-auto">
+        <div class="col-lg-8 mx-auto">
             <div class="card border-danger">
                 <div class="card-header bg-danger text-white">
-                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Confirmar Exclusão</h4>
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Confirmar Exclusão de Categoria</h4>
                 </div>
                 <div class="card-body">
+                    {% if show_error %}
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-circle"></i>
+                            <strong>Erro ao excluir:</strong> Esta categoria possui transações vinculadas.
+                            Você precisa reatribuir as transações antes de excluí-la.
+                        </div>
+                    {% endif %}
+                    
                     <p class="lead">Tem certeza que deseja excluir a categoria?</p>
+                    
                     <div class="alert alert-warning">
                         <i class="{{ categoria.icone }}" style="color: {{ categoria.cor }};"></i>
                         <strong>{{ categoria.nome }}</strong> ({{ categoria.get_tipo_display }})
                     </div>
-                    <p class="text-danger">
-                        <i class="bi bi-exclamation-circle"></i>
-                        Esta ação não pode ser desfeita.
-                    </p>
                     
-                    <form method="post" class="d-flex gap-2">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash"></i> Sim, Excluir
-                        </button>
-                        <a href="{% url 'categoria_list' %}" class="btn btn-secondary">Cancelar</a>
-                    </form>
+                    {% if qtd_transacoes > 0 %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Atenção:</strong> Esta categoria possui <strong>{{ qtd_transacoes }}</strong> transação(ões) vinculada(s).
+                            <br><br>
+                            Para excluir esta categoria, você precisa reatribuir todas as transações para outra categoria do mesmo tipo.
+                        </div>
+                        
+                        {% if outras_categorias %}
+                            <form method="post" id="deleteForm">
+                                {% csrf_token %}
+                                
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0"><i class="bi bi-shuffle"></i> Reatribuir Transações</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="radio" name="reatribuir" id="reatribuirSim" value="sim" checked>
+                                            <label class="form-check-label" for="reatribuirSim">
+                                                <strong>Sim</strong>, reatribuir transações para outra categoria antes de excluir
+                                            </label>
+                                        </div>
+                                        
+                                        <div id="selectCategoriaDiv" class="ms-4 mb-3">
+                                            <label for="nova_categoria" class="form-label">Selecione a nova categoria:</label>
+                                            <select class="form-select" name="nova_categoria" id="nova_categoria" required>
+                                                <option value="">-- Escolha uma categoria --</option>
+                                                {% for outra_categoria in outras_categorias %}
+                                                    <option value="{{ outra_categoria.id }}">
+                                                        <i class="{{ outra_categoria.icone }}"></i>
+                                                        {{ outra_categoria.nome }}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                As {{ qtd_transacoes }} transação(ões) serão transferidas para a categoria selecionada.
+                                            </small>
+                                        </div>
+                                        
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="reatribuir" id="reatribuirNao" value="nao">
+                                            <label class="form-check-label" for="reatribuirNao">
+                                                <strong>Não</strong>, cancelar a exclusão
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-danger" id="btnExcluir">
+                                        <i class="bi bi-trash"></i> Reatribuir e Excluir Categoria
+                                    </button>
+                                    <a href="{% url 'categoria_list' %}" class="btn btn-secondary">Cancelar</a>
+                                </div>
+                            </form>
+                            
+                            <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    const reatribuirSim = document.getElementById('reatribuirSim');
+                                    const reatribuirNao = document.getElementById('reatribuirNao');
+                                    const selectCategoriaDiv = document.getElementById('selectCategoriaDiv');
+                                    const novaCategoriaSelect = document.getElementById('nova_categoria');
+                                    const btnExcluir = document.getElementById('btnExcluir');
+                                    const deleteForm = document.getElementById('deleteForm');
+                                    
+                                    function updateForm() {
+                                        if (reatribuirSim.checked) {
+                                            selectCategoriaDiv.style.display = 'block';
+                                            novaCategoriaSelect.required = true;
+                                            btnExcluir.innerHTML = '<i class="bi bi-trash"></i> Reatribuir e Excluir Categoria';
+                                            btnExcluir.disabled = false;
+                                        } else {
+                                            selectCategoriaDiv.style.display = 'none';
+                                            novaCategoriaSelect.required = false;
+                                            btnExcluir.innerHTML = '<i class="bi bi-x-circle"></i> Cancelar';
+                                        }
+                                    }
+                                    
+                                    reatribuirSim.addEventListener('change', updateForm);
+                                    reatribuirNao.addEventListener('change', updateForm);
+                                    
+                                    deleteForm.addEventListener('submit', function(e) {
+                                        if (reatribuirNao.checked) {
+                                            e.preventDefault();
+                                            window.location.href = "{% url 'categoria_list' %}";
+                                        } else if (reatribuirSim.checked) {
+                                            if (!novaCategoriaSelect.value) {
+                                                e.preventDefault();
+                                                alert('Por favor, selecione uma categoria para reatribuir as transações.');
+                                                return;
+                                            }
+                                            if (!confirm('Confirma a reatribuição de {{ qtd_transacoes }} transação(ões) e exclusão da categoria "{{ categoria.nome }}"?')) {
+                                                e.preventDefault();
+                                            }
+                                        }
+                                    });
+                                    
+                                    updateForm();
+                                });
+                            </script>
+                        {% else %}
+                            <div class="alert alert-danger">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Não é possível excluir esta categoria!</strong><br>
+                                Não há outras categorias ativas de {{ categoria.get_tipo_display|lower }} para reatribuir as transações.
+                                <br><br>
+                                <strong>Opções:</strong>
+                                <ul class="mb-0">
+                                    <li>Crie outra categoria de {{ categoria.get_tipo_display|lower }} primeiro</li>
+                                    <li>Exclua manualmente as {{ qtd_transacoes }} transação(ões)</li>
+                                    <li>Desative a categoria ao invés de excluí-la</li>
+                                </ul>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'categoria_list' %}" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-left"></i> Voltar
+                                </a>
+                                <a href="{% url 'categoria_create' %}" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle"></i> Criar Nova Categoria
+                                </a>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- Categoria sem transações - pode excluir diretamente -->
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle"></i>
+                            Esta categoria não possui transações vinculadas e pode ser excluída com segurança.
+                        </div>
+                        
+                        <p class="text-danger">
+                            <i class="bi bi-exclamation-circle"></i>
+                            Esta ação não pode ser desfeita.
+                        </p>
+                        
+                        <form method="post" class="d-flex gap-2" onsubmit="return confirm('Confirma a exclusão da categoria \"{{ categoria.nome }}\"?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="reatribuir" value="nao">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Sim, Excluir Categoria
+                            </button>
+                            <a href="{% url 'categoria_list' %}" class="btn btn-secondary">Cancelar</a>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
         </div>

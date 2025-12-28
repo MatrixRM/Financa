@@ -8,11 +8,22 @@ from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
 import logging
+import os
+import base64
+import json
 from reportlab.lib.pagesizes import letter, A4
+
+# Importar views de chat do módulo separado
+from .chat_views.chat_views import (
+    chat_interface_view,
+    chat_message_view,
+    chat_history_view
+)
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -291,17 +302,80 @@ def conta_update_view(request, pk):
 
 @login_required
 def conta_delete_view(request, pk):
-    """Deletar conta"""
+    """Deletar conta com opção de reatribuir transações"""
+    from django.db.models import ProtectedError
+    
     casa = request.user.casa
+    if not casa:
+        messages.error(request, 'Você não está associado a uma casa.')
+        return redirect('conta_list')
+    
     conta = get_object_or_404(Conta, pk=pk, casa=casa)
+    
+    # Verificar se há transações vinculadas
+    transacoes_vinculadas = conta.transacoes.all()
+    qtd_transacoes = transacoes_vinculadas.count()
+    
+    # Buscar outras contas disponíveis para reatribuição
+    outras_contas = Conta.objects.filter(casa=casa, ativa=True).exclude(pk=pk)
     
     if request.method == 'POST':
         nome = conta.nome
-        conta.delete()
-        messages.success(request, f'Conta "{nome}" excluída com sucesso!')
+        conta_id = conta.id
+        
+        # Verificar se usuário escolheu reatribuir transações
+        reatribuir = request.POST.get('reatribuir') == 'sim'
+        nova_conta_id = request.POST.get('nova_conta')
+        
+        try:
+            if reatribuir and nova_conta_id:
+                # Reatribuir todas as transações para a nova conta
+                nova_conta = get_object_or_404(Conta, pk=nova_conta_id, casa=casa)
+                qtd_reatribuidas = transacoes_vinculadas.update(conta=nova_conta)
+                
+                logger.info(
+                    f"Usuário {request.user.username} reatribuiu {qtd_reatribuidas} "
+                    f"transações da conta ID {conta_id} para conta ID {nova_conta_id}"
+                )
+                
+                messages.info(
+                    request,
+                    f'{qtd_reatribuidas} transação(ões) foram reatribuídas para "{nova_conta.nome}"'
+                )
+            
+            # Tentar excluir a conta
+            logger.info(f"Usuário {request.user.username} tentando excluir conta ID {conta_id}: {nome}")
+            conta.delete()
+            logger.info(f"Conta ID {conta_id} excluída com sucesso")
+            messages.success(request, f'Conta "{nome}" excluída com sucesso!')
+            
+        except ProtectedError as e:
+            logger.error(f"Erro ProtectedError ao excluir conta ID {conta_id}: {e}")
+            messages.error(
+                request,
+                f'Não é possível excluir a conta "{nome}" porque ela possui {qtd_transacoes} '
+                f'transação(ões) vinculada(s). Reatribua as transações para outra conta primeiro.'
+            )
+            # Redirecionar de volta para a página de confirmação
+            return render(request, 'accounts/conta_confirm_delete.html', {
+                'conta': conta,
+                'qtd_transacoes': qtd_transacoes,
+                'outras_contas': outras_contas,
+                'show_error': True
+            })
+            
+        except Exception as e:
+            logger.error(f"Erro ao excluir conta ID {conta_id}: {type(e).__name__}: {e}")
+            messages.error(request, f'Erro ao excluir conta: {str(e)}')
+        
         return redirect('conta_list')
     
-    return render(request, 'accounts/conta_confirm_delete.html', {'conta': conta})
+    # GET - mostrar página de confirmação
+    return render(request, 'accounts/conta_confirm_delete.html', {
+        'conta': conta,
+        'qtd_transacoes': qtd_transacoes,
+        'outras_contas': outras_contas
+    })
 
 
 # ===========================
@@ -365,17 +439,84 @@ def categoria_update_view(request, pk):
 
 @login_required
 def categoria_delete_view(request, pk):
-    """Deletar categoria"""
+    """Deletar categoria com opção de reatribuir transações"""
+    from django.db.models import ProtectedError
+    
     casa = request.user.casa
+    if not casa:
+        messages.error(request, 'Você não está associado a uma casa.')
+        return redirect('categoria_list')
+    
     categoria = get_object_or_404(Categoria, pk=pk, casa=casa)
+    
+    # Verificar se há transações vinculadas
+    transacoes_vinculadas = categoria.transacoes.all()
+    qtd_transacoes = transacoes_vinculadas.count()
+    
+    # Buscar outras categorias disponíveis para reatribuição (do mesmo tipo)
+    outras_categorias = Categoria.objects.filter(
+        casa=casa, 
+        tipo=categoria.tipo, 
+        ativa=True
+    ).exclude(pk=pk)
     
     if request.method == 'POST':
         nome = categoria.nome
-        categoria.delete()
-        messages.success(request, f'Categoria "{nome}" excluída com sucesso!')
+        categoria_id = categoria.id
+        
+        # Verificar se usuário escolheu reatribuir transações
+        reatribuir = request.POST.get('reatribuir') == 'sim'
+        nova_categoria_id = request.POST.get('nova_categoria')
+        
+        try:
+            if reatribuir and nova_categoria_id:
+                # Reatribuir todas as transações para a nova categoria
+                nova_categoria = get_object_or_404(Categoria, pk=nova_categoria_id, casa=casa)
+                qtd_reatribuidas = transacoes_vinculadas.update(categoria=nova_categoria)
+                
+                logger.info(
+                    f"Usuário {request.user.username} reatribuiu {qtd_reatribuidas} "
+                    f"transações da categoria ID {categoria_id} para categoria ID {nova_categoria_id}"
+                )
+                
+                messages.info(
+                    request,
+                    f'{qtd_reatribuidas} transação(ões) foram reatribuídas para "{nova_categoria.nome}"'
+                )
+            
+            # Tentar excluir a categoria
+            logger.info(f"Usuário {request.user.username} tentando excluir categoria ID {categoria_id}: {nome}")
+            categoria.delete()
+            logger.info(f"Categoria ID {categoria_id} excluída com sucesso")
+            messages.success(request, f'Categoria "{nome}" excluída com sucesso!')
+            
+        except ProtectedError as e:
+            logger.error(f"Erro ProtectedError ao excluir categoria ID {categoria_id}: {e}")
+            messages.error(
+                request,
+                f'Não é possível excluir a categoria "{nome}" porque ela possui {qtd_transacoes} '
+                f'transação(ões) vinculada(s). Reatribua as transações para outra categoria primeiro.'
+            )
+            # Redirecionar de volta para a página de confirmação
+            return render(request, 'categories/categoria_confirm_delete.html', {
+                'categoria': categoria,
+                'qtd_transacoes': qtd_transacoes,
+                'outras_categorias': outras_categorias,
+                'show_error': True
+            })
+            
+        except Exception as e:
+            logger.error(f"Erro ao excluir categoria ID {categoria_id}: {type(e).__name__}: {e}")
+            messages.error(request, f'Erro ao excluir categoria: {str(e)}')
+        
         return redirect('categoria_list')
     
-    return render(request, 'categories/categoria_confirm_delete.html', {'categoria': categoria})
+    # GET - mostrar página de confirmação
+    return render(request, 'categories/categoria_confirm_delete.html', {
+        'categoria': categoria,
+        'qtd_transacoes': qtd_transacoes,
+        'outras_categorias': outras_categorias
+    })
 
 
 # ===========================
@@ -541,12 +682,30 @@ def transacao_update_view(request, pk):
 def transacao_delete_view(request, pk):
     """Deletar transação"""
     casa = request.user.casa
+    
+    if not casa:
+        messages.error(request, 'Você não está associado a uma casa.')
+        return redirect('transacao_list')
+    
     transacao = get_object_or_404(Transacao, pk=pk, casa=casa)
     
     if request.method == 'POST':
         titulo = transacao.titulo
-        transacao.delete()
-        messages.success(request, f'Transação "{titulo}" excluída com sucesso!')
+        transacao_id = transacao.id
+        
+        try:
+            # Log da tentativa de exclusão
+            logger.info(f"Usuário {request.user.username} tentando excluir transação ID {transacao_id}: {titulo}")
+            
+            transacao.delete()
+            
+            logger.info(f"Transação ID {transacao_id} excluída com sucesso")
+            messages.success(request, f'Transação "{titulo}" excluída com sucesso!')
+            
+        except Exception as e:
+            logger.error(f"Erro ao excluir transação ID {transacao_id}: {type(e).__name__}: {e}")
+            messages.error(request, f'Erro ao excluir transação: {str(e)}')
+        
         return redirect('transacao_list')
     
     return render(request, 'transactions/transacao_confirm_delete.html', {'transacao': transacao})
@@ -751,12 +910,6 @@ def exportar_pdf_view(request):
 # ===========================
 # Views de Autenticação Biométrica (WebAuthn)
 # ===========================
-
-import os
-import base64
-import json
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 
 def biometria_challenge_view(request):
     """Gera um challenge para autenticação biométrica"""
@@ -1197,556 +1350,4 @@ def format_transaction_preview(transacao):
         f"Conta: {transacao.conta.nome}\n"
         f"Data: {transacao.data.strftime('%d/%m/%Y')}"
     )
-
-
-def save_chat_history(user, user_message, assistant_response, intent, transcribed_text=None):
-    """Salva o histórico de conversação do chat."""
-    from core.models import ChatHistory
-    
-    ChatHistory.objects.create(
-        usuario=user,
-        user_message=user_message,
-        assistant_response=assistant_response,
-        intent=intent,
-        transcribed_text=transcribed_text
-    )
-
-
-@login_required
-def chat_interface_view(request):
-    """Renderiza a interface de chat financeiro."""
-    return render(request, 'chat/interface.html')
-
-
-@api_view(['GET'])
-def chat_history_view(request):
-    """Retorna o histórico recente de conversas do chat."""
-    if not request.user.is_authenticated:
-        return Response(
-            {"error": "Usuário não autenticado"},
-            status=rest_status.HTTP_401_UNAUTHORIZED
-        )
-    
-    from core.models import ChatHistory
-    
-    # Buscar últimas 20 mensagens
-    history = ChatHistory.objects.filter(
-        usuario=request.user
-    ).order_by('-created_at')[:20]
-    
-    # Reverter ordem para exibir do mais antigo ao mais recente
-    history = list(reversed(history))
-    
-    messages = []
-    for entry in history:
-        messages.append({
-            'role': 'user',
-            'content': entry.user_message,
-            'timestamp': entry.created_at.isoformat()
-        })
-        messages.append({
-            'role': 'assistant',
-            'content': entry.assistant_response,
-            'intent': entry.intent,
-            'timestamp': entry.created_at.isoformat()
-        })
-    
-    return Response({
-        'messages': messages,
-        'count': len(messages)
-    }, status=rest_status.HTTP_200_OK)
-
-
-@csrf_exempt
-@api_view(['POST'])
-@parser_classes([JSONParser, MultiPartParser, FormParser])
-def chat_message_view(request):
-    """
-    Endpoint principal para processar mensagens do chat financeiro.
-    Aceita texto ou áudio, envia para a OpenAI e retorna resposta estruturada.
-    """
-    logger_chat.info(f"Recebida requisição de chat. Content-Type: {request.content_type}")
-    logger_chat.info(f"Data recebida: {request.data}")
-    
-    serializer = ChatMessageSerializer(data=request.data)
-    if not serializer.is_valid():
-        logger_chat.error(f"Erro de validação: {serializer.errors}")
-        return Response(
-            {"error": serializer.errors},
-            status=rest_status.HTTP_400_BAD_REQUEST
-        )
-
-    validated_data = serializer.validated_data
-    message_text = validated_data.get('message', '').strip()
-    audio_file = validated_data.get('audio')
-    context = validated_data.get('context', [])
-
-    try:
-        client = OpenAIClient()
-
-        # Se recebeu áudio, transcreve primeiro
-        transcribed_text = None
-        if audio_file:
-            logger_chat.info("Transcrevendo áudio do usuário...")
-            transcribed_text = client.transcribe_audio(audio_file)
-            message_text = transcribed_text
-            logger_chat.info(f"Áudio transcrito: {transcribed_text[:100]}...")
-
-        if not message_text:
-            return Response(
-                {"error": "Não foi possível obter texto da mensagem ou transcrição."},
-                status=rest_status.HTTP_400_BAD_REQUEST
-            )
-
-        # Se o usuário mencionar edição, adicionar transações recentes ao contexto
-        if any(word in message_text.lower() for word in ['edit', 'editar', 'alterar', 'mudar', 'corrigir', 'atualizar']):
-            if request.user.is_authenticated and request.user.casa:
-                recent_transactions = Transacao.objects.filter(
-                    casa=request.user.casa
-                ).order_by('-data', '-id')[:5]
-                
-                if recent_transactions:
-                    trans_list = "\n".join([
-                        f"ID{t.id}: {t.data.strftime('%d/%m')} - {t.categoria.nome} - {t.conta.nome} - R$ {t.valor:.2f}"
-                        for t in recent_transactions
-                    ])
-                    context.append({
-                        'role': 'system',
-                        'content': f"Transações recentes do usuário:\n{trans_list}"
-                    })
-
-        # Processa a mensagem com o modelo
-        logger_chat.info(f"Processando mensagem: {message_text[:100]}...")
-        parsed_response = client.parse_user_message(
-            message=message_text,
-            context=context
-        )
-        
-        # Log detalhado da resposta da IA
-        logger_chat.info(f"Resposta da IA - Intent: {parsed_response.get('intent')}")
-        logger_chat.info(f"Resposta da IA - Clarification: {parsed_response.get('clarification_needed')}")
-        logger_chat.info(f"Resposta da IA - Transaction: {parsed_response.get('transaction')}")
-
-        # Adiciona o texto transcrito na resposta se houver
-        if transcribed_text:
-            parsed_response['transcribed_text'] = transcribed_text
-
-        # Se a intenção for criar transação
-        intent = parsed_response.get('intent')
-        needs_clarification = parsed_response.get('clarification_needed', False)
-
-        if intent == 'create_transaction':
-            transaction_data = parsed_response.get('transaction')
-            
-            # A IA pode retornar uma transação (objeto) ou múltiplas (array)
-            if isinstance(transaction_data, list):
-                # Múltiplas transações
-                logger_chat.info(f"IA retornou {len(transaction_data)} transações")
-                saved_transactions = []
-                
-                for idx, trans_data in enumerate(transaction_data):
-                    has_required_data = trans_data.get('amount') and trans_data.get('amount') > 0
-                    
-                    if has_required_data and request.user.is_authenticated:
-                        try:
-                            saved_transaction = save_chat_transaction(
-                                user=request.user,
-                                transaction_data=trans_data,
-                                original_message=f"{message_text} (transação {idx+1}/{len(transaction_data)})"
-                            )
-                            saved_transactions.append(saved_transaction)
-                            logger_chat.info(f"Transação {idx+1} salva: ID {saved_transaction.id}")
-                        except Exception as e:
-                            logger_chat.error(f"Erro ao salvar transação {idx+1}: {e}")
-                
-                if saved_transactions:
-                    parsed_response['transaction_saved'] = True
-                    parsed_response['transaction_ids'] = [t.id for t in saved_transactions]
-                    
-                    # Criar lista formatada das transações
-                    trans_list = "\n".join([
-                        f"  {i+1}. {t.titulo} - R$ {t.valor:.2f} ({t.categoria.nome})"
-                        for i, t in enumerate(saved_transactions)
-                    ])
-                    
-                    total = sum(t.valor for t in saved_transactions)
-                    tipo = "despesas" if saved_transactions[0].tipo == "despesa" else "receitas"
-                    icone = "💸" if saved_transactions[0].tipo == "despesa" else "💰"
-                    
-                    parsed_response['assistant_message'] = (
-                        f"✅ {len(saved_transactions)} {tipo} registradas com sucesso!\n\n"
-                        f"{trans_list}\n\n"
-                        f"{icone} Total: R$ {total:.2f}"
-                    )
-                else:
-                    parsed_response['transaction_saved'] = False
-                    
-            elif isinstance(transaction_data, dict):
-                # Transação única
-                has_required_data = (
-                    transaction_data.get('amount') and
-                    transaction_data.get('amount') > 0
-                )
-                
-                if has_required_data and request.user.is_authenticated:
-                    try:
-                        # Usar o valor validado para pending_transaction_id (se enviado pelo frontend)
-                        pending_transaction_id = validated_data.get('pending_transaction_id')
-
-                        if pending_transaction_id:
-                            # Editar transação existente
-                            saved_transaction = update_chat_transaction(
-                                transaction_id=pending_transaction_id,
-                                user=request.user,
-                                transaction_data=transaction_data,
-                                original_message=message_text
-                            )
-                            logger_chat.info(f"Transação {saved_transaction.id} atualizada com sucesso")
-                            parsed_response['transaction_id'] = saved_transaction.id
-                            parsed_response['transaction_saved'] = True
-
-                        else:
-                            # Se a IA pediu esclarecimento, criar registro pendente ao invés de definitivo
-                            if needs_clarification:
-                                saved_transaction = save_chat_transaction(
-                                    user=request.user,
-                                    transaction_data=transaction_data,
-                                    original_message=message_text,
-                                    status='pendente'
-                                )
-                                logger_chat.info(f"Transação pendente criada: ID {saved_transaction.id}")
-                                parsed_response['transaction_id'] = saved_transaction.id
-                                parsed_response['transaction_pending'] = True
-                                parsed_response['transaction_saved'] = False
-                            else:
-                                # Tentar encontrar uma transação 'pendente' recente do mesmo usuário
-                                # e atualizá-la quando o frontend não enviou `pending_transaction_id`.
-                                fallback_updated = None
-                                try:
-                                    from datetime import timedelta
-                                    from django.utils import timezone as dj_timezone
-
-                                    cutoff = dj_timezone.now() - timedelta(days=2)
-                                    pend_qs = Transacao.objects.filter(
-                                        casa=request.user.casa,
-                                        pago_por=request.user,
-                                        status='pendente',
-                                        criada_em__gte=cutoff
-                                    ).order_by('-criada_em')
-
-                                    if pend_qs.exists():
-                                        candidate = pend_qs.first()
-                                        # Atualizar o candidato com os dados recebidos
-                                        saved_candidate = update_chat_transaction(
-                                            transaction_id=candidate.id,
-                                            user=request.user,
-                                            transaction_data=transaction_data,
-                                            original_message=message_text
-                                        )
-                                        fallback_updated = saved_candidate
-                                        logger_chat.info(f"Transação pendente encontrada e atualizada: ID {saved_candidate.id}")
-                                except Exception as e:
-                                    logger_chat.warning(f"Erro ao tentar fallback update de pendente: {e}")
-
-                                if fallback_updated:
-                                    parsed_response['transaction_id'] = fallback_updated.id
-                                    parsed_response['transaction_saved'] = True
-                                else:
-                                    # Criar nova transação definitiva
-                                    saved_transaction = save_chat_transaction(
-                                        user=request.user,
-                                        transaction_data=transaction_data,
-                                        original_message=message_text,
-                                        status='paga'
-                                    )
-                                    logger_chat.info(f"Transação salva com sucesso: ID {saved_transaction.id}")
-                                    parsed_response['transaction_id'] = saved_transaction.id
-                                    parsed_response['transaction_saved'] = True
-                    except Exception as e:
-                        logger_chat.error(f"Erro ao salvar/atualizar transação: {e}")
-                        parsed_response['transaction_saved'] = False
-                        parsed_response['save_error'] = str(e)
-                else:
-                    # Não há dados suficientes para criar a transação
-                    logger_chat.warning(f"Dados insuficientes para criar transação: {transaction_data}")
-                    parsed_response['transaction_saved'] = False
-                    if not needs_clarification:
-                        # Forçar clarification se não foi detectado pela IA
-                        parsed_response['clarification_needed'] = True
-                        
-                        # Verificar o que está faltando
-                        missing = []
-                        if not transaction_data.get('amount'):
-                            missing.append("o valor")
-                        if not transaction_data.get('title') and not transaction_data.get('category'):
-                            missing.append("a descrição ou categoria")
-                        
-                        if missing:
-                            missing_text = " e ".join(missing)
-                            parsed_response['assistant_message'] = (
-                                f"⚠️ Para registrar a transação, preciso saber {missing_text}.\n\n"
-                                f"💡 Exemplo: 'Gastei 50 reais no mercado'"
-                            )
-                        elif 'assistant_message' in parsed_response and 'valor' not in parsed_response['assistant_message'].lower():
-                            parsed_response['assistant_message'] += "\n\n💡 Por favor, me diga o valor da transação."
-        
-        # Se a intenção for editar transação existente
-        elif intent == 'edit_transaction':
-            search_criteria = parsed_response.get('search_criteria', {})
-            transaction_data = parsed_response.get('transaction', {})
-            
-            logger_chat.info(f"🔍 EDIÇÃO - Critérios de busca: {search_criteria}")
-            logger_chat.info(f"🔍 EDIÇÃO - Dados da transação: {transaction_data}")
-            
-            if request.user.is_authenticated and not needs_clarification:
-                try:
-                    # Buscar transações que correspondam aos critérios
-                    found_transactions = search_transactions(
-                        user=request.user,
-                        criteria=search_criteria
-                    )
-                    
-                    logger_chat.info(f"🔍 EDIÇÃO - Transações encontradas: {len(found_transactions)}")
-                    if len(found_transactions) > 0:
-                        logger_chat.info(f"🔍 EDIÇÃO - Primeira transação: {found_transactions[0].titulo} - R$ {found_transactions[0].valor} - {found_transactions[0].data}")
-                    
-                    if len(found_transactions) == 0:
-                        parsed_response['assistant_message'] = (
-                            "🔍 Não encontrei nenhuma transação com essas características.\n\n"
-                            "💡 Dica: Tente mencionar:\n"
-                            "• A data exata (ex: 'dia 08/11')\n"
-                            "• O valor aproximado (ex: 'de R$ 250')\n"
-                            "• A categoria ou descrição (ex: 'mercado', 'gasolina')\n"
-                            "• A conta usada (ex: 'cartão de crédito', 'conta corrente')"
-                        )
-                        parsed_response['clarification_needed'] = True
-                    elif len(found_transactions) == 1:
-                        # Atualizar a transação encontrada
-                        old_transaction = found_transactions[0]
-                        saved_transaction = update_chat_transaction(
-                            transaction_id=old_transaction.id,
-                            user=request.user,
-                            transaction_data=transaction_data,
-                            original_message=message_text
-                        )
-                        parsed_response['transaction_id'] = saved_transaction.id
-                        parsed_response['transaction_saved'] = True
-                        
-                        # Mostrar o que foi alterado
-                        changes = []
-                        if transaction_data.get('amount') and old_transaction.valor != transaction_data['amount']:
-                            changes.append(f"Valor: R$ {old_transaction.valor:.2f} → R$ {saved_transaction.valor:.2f}")
-                        if transaction_data.get('title') and old_transaction.titulo != transaction_data['title']:
-                            changes.append(f"Descrição: {old_transaction.titulo} → {saved_transaction.titulo}")
-                        if transaction_data.get('date') and str(old_transaction.data) != transaction_data['date']:
-                            changes.append(f"Data: {old_transaction.data.strftime('%d/%m/%Y')} → {saved_transaction.data.strftime('%d/%m/%Y')}")
-                        
-                        changes_text = "\n".join([f"  • {c}" for c in changes]) if changes else "  • Dados atualizados"
-                        
-                        parsed_response['assistant_message'] = (
-                            f"✅ Transação atualizada com sucesso!\n\n"
-                            f"📝 Alterações:\n{changes_text}\n\n"
-                            f"{format_transaction_preview(saved_transaction)}"
-                        )
-                    else:
-                        # Múltiplas transações encontradas
-                        trans_list = "\n".join([
-                            f"  {i+1}. {t.data.strftime('%d/%m/%Y')} - {t.titulo} - R$ {t.valor:.2f} ({t.conta.nome})"
-                            for i, t in enumerate(found_transactions[:5])
-                        ])
-                        
-                        mais = f"\n  ... e mais {len(found_transactions) - 5} transações" if len(found_transactions) > 5 else ""
-                        
-                        parsed_response['assistant_message'] = (
-                            f"🔍 Encontrei {len(found_transactions)} transações:\n\n"
-                            f"{trans_list}{mais}\n\n"
-                            f"💡 Para editar, seja mais específico mencionando:\n"
-                            f"• A data exata (ex: 'a transação do dia 08/11')\n"
-                            f"• O valor exato (ex: 'a de R$ {found_transactions[0].valor:.2f}')"
-                        )
-                        parsed_response['clarification_needed'] = True
-                        
-                except Exception as e:
-                    logger_chat.error(f"Erro ao buscar/editar transação: {e}")
-                    parsed_response['assistant_message'] = f"Erro ao processar edição: {str(e)}"
-                    parsed_response['clarification_needed'] = True
-        
-        # Se a intenção for gerar relatório
-        elif intent == 'query_summary':
-            query = parsed_response.get('query', {})
-            logger_chat.info(f"📊 RELATÓRIO - Query recebida: {query}")
-            
-            if request.user.is_authenticated and not needs_clarification:
-                try:
-                    from datetime import datetime as dt_datetime, timedelta
-                    from django.db.models import Sum, Count, Q
-                    
-                    # Extrair parâmetros do relatório
-                    # A IA retorna: {"summary_type": "month_total", "period": {"start_date": "...", "end_date": "..."}}
-                    period_obj = query.get('period', {})
-                    start_date = period_obj.get('start_date')
-                    end_date = period_obj.get('end_date')
-                    category = query.get('category')
-                    transaction_type = query.get('type')  # despesa, receita
-                    
-                    # Definir período
-                    hoje = dt_datetime.now().date()
-                    
-                    # Se a IA forneceu datas, usar elas
-                    if start_date and end_date:
-                        try:
-                            inicio = dt_datetime.fromisoformat(start_date).date()
-                            fim = dt_datetime.fromisoformat(end_date).date()
-                        except:
-                            # Fallback para mês atual
-                            inicio = hoje.replace(day=1)
-                            if hoje.month == 12:
-                                fim = hoje.replace(day=31)
-                            else:
-                                proximo_mes = hoje.replace(month=hoje.month + 1, day=1)
-                                fim = proximo_mes - timedelta(days=1)
-                    else:
-                        # Fallback para mês atual
-                        inicio = hoje.replace(day=1)
-                        if hoje.month == 12:
-                            fim = hoje.replace(day=31)
-                        else:
-                            proximo_mes = hoje.replace(month=hoje.month + 1, day=1)
-                            fim = proximo_mes - timedelta(days=1)
-                    
-                    logger_chat.info(f"📊 RELATÓRIO - Período: {inicio} a {fim}")
-                    
-                    # Buscar transações
-                    queryset = Transacao.objects.filter(
-                        casa=request.user.casa,
-                        data__gte=inicio,
-                        data__lte=fim
-                    )
-                    
-                    if category:
-                        queryset = queryset.filter(categoria__nome__icontains=category)
-                    
-                    if transaction_type:
-                        queryset = queryset.filter(tipo=transaction_type)
-                    
-                    # Calcular totais
-                    despesas = queryset.filter(tipo='despesa').aggregate(
-                        total=Sum('valor'),
-                        count=Count('id')
-                    )
-                    receitas = queryset.filter(tipo='receita').aggregate(
-                        total=Sum('valor'),
-                        count=Count('id')
-                    )
-                    
-                    total_despesas = despesas['total'] or 0
-                    total_receitas = receitas['total'] or 0
-                    saldo = total_receitas - total_despesas
-                    
-                    # Totais por categoria
-                    despesas_por_cat = queryset.filter(tipo='despesa').values(
-                        'categoria__nome'
-                    ).annotate(
-                        total=Sum('valor'),
-                        count=Count('id')
-                    ).order_by('-total')[:5]
-                    
-                    receitas_por_cat = queryset.filter(tipo='receita').values(
-                        'categoria__nome'
-                    ).annotate(
-                        total=Sum('valor'),
-                        count=Count('id')
-                    ).order_by('-total')[:5]
-                    
-                    # Formatar relatório
-                    periodo_texto = f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
-                    
-                    relatorio = [
-                        f"📊 **RELATÓRIO FINANCEIRO**",
-                        f"📅 Período: {periodo_texto}",
-                        "",
-                        "💰 **RESUMO GERAL**",
-                        f"• Receitas: R$ {total_receitas:,.2f} ({receitas['count']} transações)",
-                        f"• Despesas: R$ {total_despesas:,.2f} ({despesas['count']} transações)",
-                        f"• Saldo: R$ {saldo:,.2f}",
-                        ""
-                    ]
-                    
-                    if despesas_por_cat:
-                        relatorio.append("📉 **TOP 5 DESPESAS POR CATEGORIA**")
-                        for item in despesas_por_cat:
-                            cat_nome = item['categoria__nome'] or 'Sem categoria'
-                            relatorio.append(f"• {cat_nome}: R$ {item['total']:,.2f} ({item['count']} transações)")
-                        relatorio.append("")
-                    
-                    if receitas_por_cat:
-                        relatorio.append("📈 **TOP 5 RECEITAS POR CATEGORIA**")
-                        for item in receitas_por_cat:
-                            cat_nome = item['categoria__nome'] or 'Sem categoria'
-                            relatorio.append(f"• {cat_nome}: R$ {item['total']:,.2f} ({item['count']} transações)")
-                        relatorio.append("")
-                    
-                    # Adicionar análise
-                    if saldo > 0:
-                        relatorio.append(f"✅ Saldo positivo de R$ {saldo:,.2f}")
-                    elif saldo < 0:
-                        relatorio.append(f"⚠️ Saldo negativo de R$ {abs(saldo):,.2f}")
-                    else:
-                        relatorio.append("⚖️ Receitas e despesas equilibradas")
-                    
-                    if total_despesas > 0 and total_receitas > 0:
-                        percentual = (total_despesas / total_receitas) * 100
-                        relatorio.append(f"📊 Você gastou {percentual:.1f}% das suas receitas")
-                    
-                    parsed_response['assistant_message'] = "\n".join(relatorio)
-                    parsed_response['report_generated'] = True
-                    
-                    logger_chat.info(f"📊 RELATÓRIO - Gerado com sucesso")
-                    
-                except Exception as e:
-                    logger_chat.error(f"Erro ao gerar relatório: {e}")
-                    parsed_response['assistant_message'] = f"⚠️ Erro ao gerar relatório: {str(e)}"
-                    parsed_response['clarification_needed'] = True
-            else:
-                if needs_clarification:
-                    logger_chat.info("📊 RELATÓRIO - Aguardando esclarecimento")
-
-        # Salvar histórico do chat
-        if request.user.is_authenticated:
-            try:
-                save_chat_history(
-                    user=request.user,
-                    user_message=message_text,
-                    assistant_response=parsed_response.get('assistant_message', ''),
-                    intent=intent,
-                    transcribed_text=transcribed_text
-                )
-            except Exception as e:
-                logger_chat.warning(f"Erro ao salvar histórico do chat: {e}")
-
-        response_serializer = ChatResponseSerializer(data=parsed_response)
-        if response_serializer.is_valid():
-            return Response(response_serializer.data, status=rest_status.HTTP_200_OK)
-        else:
-            logger_chat.warning(f"Resposta da OpenAI não seguiu o schema esperado: {response_serializer.errors}")
-            return Response(parsed_response, status=rest_status.HTTP_200_OK)
-
-    except OpenAIClientError as exc:
-        logger_chat.error(f"Erro do cliente OpenAI: {exc}")
-        return Response(
-            {
-                "error": "Erro ao processar sua mensagem com o assistente.",
-                "detail": str(exc)
-            },
-            status=rest_status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-    except Exception as exc:
-        logger_chat.exception("Erro inesperado ao processar mensagem do chat")
-        return Response(
-            {
-                "error": "Erro interno ao processar sua mensagem.",
-                "detail": str(exc)
-            },
-            status=rest_status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 

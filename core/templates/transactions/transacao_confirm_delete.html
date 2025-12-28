@@ -16,7 +16,13 @@
                         <strong>{{ transacao.titulo }}</strong><br>
                         Valor: R$ {{ transacao.valor|floatformat:2 }}<br>
                         Data: {{ transacao.data|date:"d/m/Y" }}<br>
-                        Categoria: {{ transacao.categoria.nome }}
+                        Categoria: {{ transacao.categoria.nome }}<br>
+                        Conta: {{ transacao.conta.nome }}<br>
+                        Pago por: {{ transacao.pago_por.get_full_name|default:transacao.pago_por.username }}<br>
+                        Status: {{ transacao.get_status_display }}
+                        {% if transacao.observacao %}
+                            <br><small class="text-muted">Obs: {{ transacao.observacao|truncatewords:20 }}</small>
+                        {% endif %}
                     </div>
                     <p class="text-danger">
                         <i class="bi bi-exclamation-circle"></i>

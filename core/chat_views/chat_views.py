@@ -110,3 +110,42 @@ def chat_interface_view(request):
     """
     from django.shortcuts import render
     return render(request, 'chat/interface.html')
+
+
+@api_view(['GET'])
+def chat_history_view(request):
+    """Retorna o histórico recente de conversas do chat."""
+    if not request.user.is_authenticated:
+        return Response(
+            {"error": "Usuário não autenticado"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    from core.models import ChatHistory
+    
+    # Buscar últimas 20 mensagens
+    history = ChatHistory.objects.filter(
+        usuario=request.user
+    ).order_by('-created_at')[:20]
+    
+    # Reverter ordem para exibir do mais antigo ao mais recente
+    history = list(reversed(history))
+    
+    messages = []
+    for entry in history:
+        messages.append({
+            'role': 'user',
+            'content': entry.user_message,
+            'timestamp': entry.created_at.isoformat()
+        })
+        messages.append({
+            'role': 'assistant',
+            'content': entry.assistant_response,
+            'intent': entry.intent,
+            'timestamp': entry.created_at.isoformat()
+        })
+    
+    return Response({
+        'messages': messages,
+        'count': len(messages)
+    }, status=status.HTTP_200_OK)
