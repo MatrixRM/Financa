@@ -35,8 +35,16 @@
     .auth-header p { margin: 0; opacity: 0.95; color: black; }
 
     .biometric-section { text-align: center; padding: 1.5rem 0; }
-    .biometric-btn { width: 110px; height: 110px; border-radius: 50%; background: var(--primary-gradient); color: white; display: inline-flex; align-items: center; justify-content: center; border: none; box-shadow: 0 10px 30px rgba(102,126,234,0.18); }
+    .biometric-btn { width: 110px; height: 110px; border-radius: 50%; background: var(--primary-gradient); color: white; display: inline-flex; align-items: center; justify-content: center; border: none; box-shadow: 0 10px 30px rgba(102,126,234,0.18); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; font-size: 3rem; }
+    .biometric-btn:hover { transform: scale(1.05); box-shadow: 0 15px 40px rgba(102,126,234,0.25); }
+    .biometric-btn:active { transform: scale(0.98); }
     .biometric-text { margin-top: 0.75rem; }
+
+    .status-message { display: none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+    .status-message i { font-size: 1.1rem; }
+    .status-info { background-color: #e7f3ff; color: #0066cc; border: 1px solid #b3d9ff; }
+    .status-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
     .divider { display:flex; align-items:center; gap:0.75rem; padding: 1rem 1.5rem; color:#6c757d; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e9ecef; }
@@ -102,40 +110,158 @@
 </div>
 
 <script>
-// Mantive a funcionalidade biométrica (WebAuthn) do projeto, reduzindo duplicações.
 document.addEventListener('DOMContentLoaded', function() {
     const biometricBtn = document.getElementById('biometricBtn');
     const biometricStatus = document.getElementById('biometricStatus');
     const biometricSection = document.getElementById('biometricSection');
 
-    function getCsrfToken() { return document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''; }
+    function getCsrfToken() { 
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''; 
+    }
 
     function showStatus(message, type='info'){
         if(!biometricStatus) return;
         biometricStatus.className = 'status-message status-' + type;
         biometricStatus.innerHTML = `<i class="bi bi-${type==='success'?'check-circle':type==='error'?'exclamation-circle':'info-circle'}"></i><span>${message}</span>`;
         biometricStatus.style.display = 'flex';
-        if(type==='success' || type==='error') setTimeout(()=> biometricStatus.style.display='none',5000);
+        if(type==='success' || type==='error') {
+            setTimeout(() => biometricStatus.style.display='none', 5000);
+        }
     }
 
+    // Verificar se o navegador suporta WebAuthn
     if (!window.PublicKeyCredential) {
         biometricSection.style.display = 'none';
         return;
     }
 
-    async function handleBiometricLogin(){
-        try{
-            showStatus('Solicitando autenticação...', 'info');
-            const resp = await fetch('/biometria/challenge/');
-            if(!resp.ok) throw new Error('Erro ao obter desafio');
-            const data = await resp.json();
-            if(!data.allowCredentials?.length){ showStatus('Faça login com senha primeiro', 'info'); return; }
-            // continuar com WebAuthn como no projeto original
-            // (transformações e envio ao servidor são compatíveis com as views existentes)
-        }catch(e){ console.error(e); showStatus('Erro na autenticação','error'); }
+    // Função auxiliar para converter base64url para Uint8Array
+    function base64urlToUint8Array(base64url) {
+        // Adicionar padding se necessário
+        const padding = '='.repeat((4 - base64url.length % 4) % 4);
+        const base64 = (base64url + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+        
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
     }
 
-    biometricBtn && biometricBtn.addEventListener('click', handleBiometricLogin);
+    // Função auxiliar para converter Uint8Array para base64url
+    function uint8ArrayToBase64url(array) {
+        let binary = '';
+        const len = array.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(array[i]);
+        }
+        return window.btoa(binary)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    }
+
+    async function handleBiometricLogin(){
+        try {
+            showStatus('Solicitando autenticação...', 'info');
+            
+            // 1. Obter challenge do servidor
+            const challengeResp = await fetch('/biometria/challenge/', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!challengeResp.ok) {
+                throw new Error('Erro ao obter desafio do servidor');
+            }
+            
+            const challengeData = await challengeResp.json();
+            
+            if (!challengeData.allowCredentials || challengeData.allowCredentials.length === 0) {
+                showStatus('Nenhuma credencial biométrica encontrada. Faça login com senha primeiro.', 'info');
+                return;
+            }
+
+            // 2. Preparar opções para WebAuthn
+            const publicKeyCredentialRequestOptions = {
+                challenge: base64urlToUint8Array(challengeData.challenge),
+                allowCredentials: challengeData.allowCredentials.map(cred => ({
+                    id: base64urlToUint8Array(cred.id),
+                    type: 'public-key',
+                    transports: ['internal', 'usb', 'nfc', 'ble']
+                })),
+                timeout: challengeData.timeout || 60000,
+                userVerification: challengeData.userVerification || 'preferred'
+            };
+
+            showStatus('Aguardando autenticação biométrica...', 'info');
+
+            // 3. Solicitar autenticação ao navegador
+            const assertion = await navigator.credentials.get({
+                publicKey: publicKeyCredentialRequestOptions
+            });
+
+            if (!assertion) {
+                throw new Error('Autenticação cancelada');
+            }
+
+            showStatus('Verificando credencial...', 'info');
+
+            // 4. Enviar resultado para o servidor
+            const verifyResp = await fetch('/biometria/verify/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    id: uint8ArrayToBase64url(new Uint8Array(assertion.rawId)),
+                    rawId: uint8ArrayToBase64url(new Uint8Array(assertion.rawId)),
+                    type: assertion.type,
+                    response: {
+                        authenticatorData: uint8ArrayToBase64url(new Uint8Array(assertion.response.authenticatorData)),
+                        clientDataJSON: uint8ArrayToBase64url(new Uint8Array(assertion.response.clientDataJSON)),
+                        signature: uint8ArrayToBase64url(new Uint8Array(assertion.response.signature)),
+                        userHandle: assertion.response.userHandle ? uint8ArrayToBase64url(new Uint8Array(assertion.response.userHandle)) : null
+                    }
+                })
+            });
+
+            const verifyData = await verifyResp.json();
+
+            if (verifyData.success) {
+                showStatus('Login realizado com sucesso! ✓', 'success');
+                setTimeout(() => {
+                    window.location.href = verifyData.redirect || '/dashboard/';
+                }, 1000);
+            } else {
+                throw new Error(verifyData.error || 'Falha na verificação');
+            }
+
+        } catch(error) {
+            console.error('Erro na autenticação biométrica:', error);
+            
+            let errorMessage = 'Erro na autenticação';
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Autenticação cancelada ou não autorizada';
+            } else if (error.name === 'InvalidStateError') {
+                errorMessage = 'Credencial já registrada';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showStatus(errorMessage, 'error');
+        }
+    }
+
+    if (biometricBtn) {
+        biometricBtn.addEventListener('click', handleBiometricLogin);
+    }
 });
 </script>
 {% endblock %}
