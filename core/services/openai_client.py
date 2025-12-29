@@ -33,6 +33,8 @@ class OpenAIClient:
                         "create_transaction",
                         "edit_transaction",
                         "query_summary",
+                        "set_goal",
+                        "check_goal",
                         "greeting",
                         "clarification",
                         "small_talk",
@@ -49,45 +51,82 @@ class OpenAIClient:
                     "description": "Resposta em português que será exibida para o usuário.",
                 },
                 "transaction": {
-                    "type": "object",
-                    "description": "Dados estruturados da transação quando o usuário informa um novo lançamento.",
-                    "properties": {
-                        "type": {
-                            "type": "string",
-                            "enum": ["despesa", "receita"],
-                            "description": "Defina como 'despesa' quando for gasto e 'receita' quando for ganho.",
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "description": "Dados de uma única transação.",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["despesa", "receita"],
+                                    "description": "Defina como 'despesa' quando for gasto e 'receita' quando for ganho.",
+                                },
+                                "amount": {
+                                    "type": "number",
+                                    "description": "Valor numérico em reais. Deve sempre ser positivo.",
+                                },
+                                "currency": {
+                                    "type": "string",
+                                    "description": "Moeda informada pelo usuário (ex: BRL).",
+                                },
+                                "title": {
+                                    "type": "string",
+                                    "description": "Descrição curta da transação.",
+                                },
+                                "category": {
+                                    "type": "string",
+                                    "description": "Categoria principal sugerida para o lançamento.",
+                                },
+                                "account": {
+                                    "type": "string",
+                                    "description": "Conta sugerida (ex: cartão, conta corrente).",
+                                },
+                                "date": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "description": "Data no formato ISO (YYYY-MM-DD).",
+                                },
+                                "notes": {
+                                    "type": "string",
+                                    "description": "Observações adicionais relevantes.",
+                                },
+                            },
+                            "additionalProperties": False,
                         },
-                        "amount": {
-                            "type": "number",
-                            "description": "Valor numérico em reais. Deve sempre ser positivo.",
+                        {
+                            "type": "array",
+                            "description": "Lista de múltiplas transações quando o usuário menciona várias compras.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": ["despesa", "receita"],
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                    },
+                                    "title": {
+                                        "type": "string",
+                                    },
+                                    "category": {
+                                        "type": "string",
+                                    },
+                                    "account": {
+                                        "type": "string",
+                                    },
+                                    "date": {
+                                        "type": "string",
+                                        "format": "date",
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                    },
+                                },
+                            },
                         },
-                        "currency": {
-                            "type": "string",
-                            "description": "Moeda informada pelo usuário (ex: BRL).",
-                        },
-                        "title": {
-                            "type": "string",
-                            "description": "Descrição curta da transação.",
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Categoria principal sugerida para o lançamento.",
-                        },
-                        "account": {
-                            "type": "string",
-                            "description": "Conta sugerida (ex: cartão, conta corrente).",
-                        },
-                        "date": {
-                            "type": "string",
-                            "format": "date",
-                            "description": "Data no formato ISO (YYYY-MM-DD).",
-                        },
-                        "notes": {
-                            "type": "string",
-                            "description": "Observações adicionais relevantes.",
-                        },
-                    },
-                    "additionalProperties": False,
+                    ],
+                    "description": "Dados estruturados da transação. Pode ser um objeto único ou array de múltiplas transações.",
                 },
                 "search_criteria": {
                     "type": "object",
@@ -163,6 +202,30 @@ class OpenAIClient:
                     },
                     "additionalProperties": False,
                 },
+                "goal": {
+                    "type": "object",
+                    "description": "Meta financeira quando o usuário quer definir ou consultar metas.",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["monthly_spending", "monthly_saving", "category_limit"],
+                            "description": "Tipo de meta (limite mensal de gastos, meta de economia, limite por categoria).",
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "Valor da meta em reais.",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Categoria específica se for limite por categoria.",
+                        },
+                        "period": {
+                            "type": "string",
+                            "description": "Período da meta (ex: 'dezembro 2025', 'este mês').",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
                 "confidence": {
                     "type": "number",
                     "description": "Grau de confiança da interpretação, variando entre 0 e 1.",
@@ -189,47 +252,81 @@ class OpenAIClient:
         return (
             f"Você é um assistente financeiro em português do Brasil. Data atual: {hoje} (ISO: {hoje_iso}). "
             "Seu trabalho é interpretar mensagens naturais do usuário sobre finanças pessoais e SEMPRE responder em JSON seguindo o schema fornecido. "
-            "Você deve decidir entre três ações: (1) registrar uma NOVA TRANSAÇÃO, (2) EDITAR uma transação existente, ou (3) criar um PEDIDO DE RELATÓRIO.\n\n"
+            "Você deve decidir entre as ações: (1) NOVA TRANSAÇÃO, (2) EDITAR transação, (3) RELATÓRIO, (4) DEFINIR META, (5) CONSULTAR META.\n\n"
 
             "REGRAS PARA NOVAS TRANSAÇÕES (intent: create_transaction):\n"
-            "- Reconheça frases que indiquem gasto (ex: paguei, comprei, gastei) como 'despesa'.\n"
-            "- Reconheça frases que indiquem entrada (ex: recebi, entrou, salário) como 'receita'.\n"
-            "- O valor deve ser sempre numérico e positivo.\n"
-            "- Inferir categoria e conta quando possível, com base no contexto.\n"
-            "- Se o usuário der informações insuficientes (valor, descrição, etc.), marque 'clarification_needed': true.\n"
-            "- IMPORTANTE: Se você pediu esclarecimento e o usuário respondeu (ex: você pediu categoria e ele disse 'mercado'), "
-            "COMPLETE a transação usando os dados anteriores + a resposta nova. NÃO peça esclarecimento novamente!\n"
-            "- Exemplo: User: 'gastei 20 reais' → Assistant pede categoria → User: 'mercado' → "
-            "REGISTRE: amount=20, category='mercado', clarification_needed=false\n\n"
+            "- Reconheça gastos (paguei, comprei, gastei) como 'despesa'.\n"
+            "- Reconheça entradas (recebi, entrou, salário) como 'receita'.\n"
+            "- Valor sempre numérico e positivo.\n"
+            "- Inferir categoria e conta quando possível.\n\n"
+            
+            "MÚLTIPLAS COMPRAS:\n"
+            "- Se o usuário mencionar várias compras COM VALORES, retorne um ARRAY de transações.\n"
+            "- CÁLCULO DE VALORES:\n"
+            "  * 'N items de R$X' → valor UNITÁRIO = X, total = N × X\n"
+            "  * '3 cervejas de R$5,50' → cada uma custa R$5,50 → total = 3 × 5,50 = 16,50\n"
+            "  * '2 chocolates de R$3,50' → cada um custa R$3,50 → total = 2 × 3,50 = 7,00\n"
+            "  * Exemplo: 'Comprei 3 salgados de R$5 e 2 refrigerantes de R$4'\n"
+            "    → [{amount:15, title:'3 salgados'}, {amount:8, title:'2 refrigerantes'}]\n"
+            "- Se faltar informação crítica (valor), marque 'clarification_needed': true.\n\n"
+            
+            "CONTEXTO E CORREÇÕES:\n"
+            "- ANALISE O HISTÓRICO: Se o usuário acabou de registrar algo e agora está CORRIGINDO, use edit_transaction!\n"
+            "- Frases de correção: 'o chocolate custa X', 'na verdade era Y', 'corrigi isso', 'era X não Y'\n"
+            "- Frases de confirmação: 'é isso mesmo', 'está certo', 'correto', 'sim' → NÃO CRIE NOVA TRANSAÇÃO!\n"
+            "  * Use intent='small_talk' e confirme: 'Ok, registrado!'\n"
+            "- Exemplo de CORREÇÃO:\n"
+            "  User: 'comprei 3 chocolates de R$13,50' → Você registra 3×13.50=40.50\n"
+            "  User: 'o chocolate custa R$3,50 cada um' → Você EDITA com search_criteria={title:'chocolate'}, transaction={amount:10.50}\n"
+            "- Exemplo de CONFIRMAÇÃO:\n"
+            "  User: 'é esse o valor aí mesmo' → intent='small_talk', assistant_message='✅ Confirmado!'\n\n"
 
-            "REGRAS PARA EDIÇÃO DE TRANSAÇÕES (intent: edit_transaction):\n"
-            "- Reconheça verbos como: editar, alterar, mudar, corrigir, atualizar, modificar.\n"
-            "- Preencha 'search_criteria' com os dados mencionados para ENCONTRAR a transação (categoria, data, conta, valor aproximado).\n"
-            "- Preencha 'transaction' APENAS com os campos que o usuário quer ALTERAR (novo valor, nova categoria, etc.).\n"
-            "- Exemplo: 'Edite a transação de pintura para 350 reais' → search_criteria: {category: 'pintura'}, transaction: {amount: 350}\n"
-            "- Se faltar informação para localizar a transação, marque 'clarification_needed': true e pergunte detalhes (data, conta, etc.).\n\n"
+            "REGRAS PARA EDIÇÃO (intent: edit_transaction):\n"
+            "- Verbos: editar, alterar, mudar, corrigir, atualizar.\n"
+            "- search_criteria: dados para ENCONTRAR a transação.\n"
+            "- transaction: apenas campos a ALTERAR.\n\n"
 
             "REGRAS DE DATA (CRÍTICO):\n"
-            f"- Se o usuário NÃO informar data, use OBRIGATORIAMENTE: {hoje_iso}.\n"
-            f"- Se disser 'hoje', 'agora', 'agorinha', use SEMPRE: {hoje_iso}.\n"
-            f"- 'Ontem' = {ontem_iso}.\n"
-            f"- 'Amanhã' = {amanha_iso}.\n"
-            "- Datas específicas devem ser convertidas para ISO (YYYY-MM-DD).\n"
-            "- Nunca invente datas além dessas regras.\n\n"
+            f"- SEM data informada = {hoje_iso}\n"
+            f"- 'hoje', 'agora' = {hoje_iso}\n"
+            f"- 'ontem' = {ontem_iso}\n"
+            f"- 'amanhã' = {amanha_iso}\n\n"
 
             "REGRAS PARA RELATÓRIOS (intent: query_summary):\n"
-            "- Quando identificado pedido de resumo, extrato, total do mês, total por categoria, etc., preencha o campo 'query'.\n"
-            "- Especifique o tipo de relatório e o período, se puder inferir.\n\n"
+            "- Palavras-chave: quanto gastei, total, relatório, extrato, resumo.\n"
+            "- Inferir período: 'este mês' = mês atual, 'dezembro' = dezembro/2025.\n"
+            "- Especificar summary_type: month_total (total do mês), category_total (por categoria), etc.\n"
+            "- Se perguntar 'quanto gastei este mês', use: summary_type='month_total', type='despesa'.\n"
+            "- Se perguntar sobre categoria específica, preencher 'category'.\n\n"
+
+            "REGRAS PARA METAS (intent: set_goal ou check_goal):\n"
+            "- set_goal: quando usuário quer DEFINIR uma meta (ex: 'quero gastar no máximo R$ 1500 este mês').\n"
+            "- check_goal: quando usuário quer CONSULTAR meta existente (ex: 'estou dentro da meta?').\n"
+            "- Tipos de meta:\n"
+            "  * monthly_spending: limite total de gastos no mês\n"
+            "  * monthly_saving: meta de economia no mês\n"
+            "  * category_limit: limite para categoria específica\n"
+            "- Exemplo: 'quero gastar no máximo 1500 este mês' → intent='set_goal', goal={type='monthly_spending', amount=1500}\n\n"
+
+            "REGRAS PARA OUTROS CASOS:\n"
+            "- greeting: saudações (oi, olá, bom dia) → responda com cumprimento amigável\n"
+            "- small_talk: conversa casual → responda educadamente e direcione para finanças\n"
+            "- unknown: quando não entender → SEMPRE peça educadamente por mais detalhes\n\n"
+
+            "CRÍTICO - SEMPRE RESPONDA:\n"
+            "- NUNCA deixe 'assistant_message' vazio\n"
+            "- Se não entender, use intent='unknown' e peça esclarecimento\n"
+            "- Se faltar informação, use 'clarification_needed': true e pergunte o que falta\n"
+            "- SEMPRE seja educado e prestativo\n"
+            "- SEMPRE responda algo, mesmo que não entenda perfeitamente\n\n"
 
             "PRINCÍPIOS GERAIS:\n"
-            "- NUNCA retorne nada fora do formato JSON.\n"
-            "- NUNCA inclua explicações fora do JSON.\n"
-            "- Não adivinhe informações críticas.\n"
-            "- Trabalhe sempre com base na data fornecida acima.\n"
-            "- CONTEXTO É FUNDAMENTAL: Ao receber o histórico da conversa (context), use as mensagens anteriores para completar informações.\n"
-            "- Se a última mensagem do assistant pediu algo (ex: 'qual categoria?') e o user respondeu com palavra única (ex: 'mercado'), "
-            "interprete como resposta ao que foi perguntado e COMPLETE a ação original.\n"
-            "- Respostas curtas como 'mercado', 'cartão', 'alimentação' são geralmente complementos da transação anterior.\n"
+            "- SEMPRE responda em JSON válido.\n"
+            "- Use o contexto (histórico) para completar informações.\n"
+            "- Respostas curtas do usuário geralmente são complementos da conversa anterior.\n"
+            "- Seja proativo: se consegue inferir informação, faça.\n"
+            "- NUNCA invente valores ou datas não mencionadas.\n"
+            "- Seja claro e objetivo nas respostas.\n"
         )
 
     def __init__(self) -> None:
@@ -343,9 +440,37 @@ class OpenAIClient:
 
         try:
             json_payload = self._extract_json_payload(response)
-            return json.loads(json_payload)
-        except Exception as exc:  # pragma: no cover - validação
-            logger.exception("Erro ao interpretar JSON retornado pela OpenAI: %s", exc)
+            logger.debug(f"JSON COMPLETO da OpenAI: {json_payload}")
+            parsed = json.loads(json_payload)
+            
+            # CORREÇÃO: Quando usa json_schema, o OpenAI retorna {"type":"object","properties":{...}}
+            # Precisamos extrair apenas o conteúdo de "properties"
+            if isinstance(parsed, dict) and parsed.get('type') == 'object' and 'properties' in parsed:
+                logger.debug("🔧 Detectado formato json_schema, extraindo 'properties'")
+                parsed = parsed['properties']
+            
+            # Validar que tem os campos obrigatórios
+            if not parsed.get('intent'):
+                logger.warning("Resposta sem 'intent', adicionando padrão")
+                parsed['intent'] = 'unknown'
+            
+            if not parsed.get('assistant_message'):
+                logger.warning("Resposta sem 'assistant_message', adicionando padrão")
+                parsed['assistant_message'] = 'Desculpe, não consegui processar sua mensagem.'
+            
+            if 'clarification_needed' not in parsed:
+                parsed['clarification_needed'] = False
+            
+            return parsed
+            
+        except json.JSONDecodeError as exc:
+            logger.exception(f"JSON inválido da OpenAI: {exc}")
+            logger.error(f"Conteúdo recebido: {json_payload if 'json_payload' in locals() else 'N/A'}")
+            raise OpenAIClientError(
+                "A resposta do modelo não pôde ser interpretada. Por favor, tente novamente."
+            )
+        except Exception as exc:
+            logger.exception(f"Erro ao interpretar resposta da OpenAI: {exc}")
             raise OpenAIClientError(
                 "A resposta do modelo não pôde ser interpretada. Por favor, tente novamente."
             )

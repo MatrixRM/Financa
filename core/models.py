@@ -204,6 +204,76 @@ class Transacao(models.Model):
         return self.valor
 
 
+class Meta(models.Model):
+    """Modelo para armazenar metas financeiras."""
+    
+    TIPO_META_CHOICES = [
+        ('monthly_spending', 'Limite de Gastos Mensal'),
+        ('monthly_saving', 'Meta de Economia Mensal'),
+        ('category_limit', 'Limite por Categoria'),
+    ]
+    
+    casa = models.ForeignKey(
+        'Casa',
+        on_delete=models.CASCADE,
+        related_name='metas',
+        verbose_name='Casa'
+    )
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_META_CHOICES,
+        verbose_name='Tipo de Meta'
+    )
+    valor = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name='Valor da Meta'
+    )
+    categoria = models.ForeignKey(
+        'Categoria',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        verbose_name='Categoria',
+        help_text='Categoria específica (apenas para tipo category_limit)'
+    )
+    mes = models.IntegerField(
+        verbose_name='Mês',
+        help_text='Mês da meta (1-12)'
+    )
+    ano = models.IntegerField(
+        verbose_name='Ano',
+        help_text='Ano da meta'
+    )
+    criada_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Criada em'
+    )
+    criada_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        verbose_name='Criada por'
+    )
+    ativa = models.BooleanField(
+        default=True,
+        verbose_name='Ativa'
+    )
+    
+    class Meta:
+        verbose_name = 'Meta Financeira'
+        verbose_name_plural = 'Metas Financeiras'
+        ordering = ['-ano', '-mes']
+        unique_together = [['casa', 'tipo', 'categoria', 'mes', 'ano']]
+    
+    def __str__(self):
+        periodo = f"{self.mes}/{self.ano}"
+        if self.tipo == 'category_limit' and self.categoria:
+            return f"{self.get_tipo_display()} - {self.categoria.nome} - {periodo}"
+        return f"{self.get_tipo_display()} - {periodo}"
+
+
 class ChatHistory(models.Model):
     """Modelo para armazenar histórico de conversas do chat financeiro."""
     

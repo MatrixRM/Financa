@@ -388,34 +388,42 @@ function addMessage(text, sender, data = null) {
     // Se houver dados de transação, mostrar preview
     if (data && data.transaction) {
         const trans = data.transaction;
-        const preview = document.createElement('div');
-        preview.className = 'transaction-preview';
         
-        // Formatar data sem conversão de timezone (usar string direta)
-        let dataFormatada = '';
-        if (trans.date) {
-            // Se vier no formato ISO (YYYY-MM-DD), converter para DD/MM/YYYY
-            const dateParts = trans.date.split('-');
-            if (dateParts.length === 3) {
-                dataFormatada = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-            } else {
-                dataFormatada = trans.date;
+        // Verificar se é array de transações (múltiplas compras)
+        if (Array.isArray(trans)) {
+            // Não renderizar preview para arrays, a mensagem de texto já tem o resumo
+            // Ex: "✅ 2 despesas registradas! • Cigarro: R$ 7.50 • Cerveja: R$ 7.50 💸 Total: R$ 15.00"
+        } else {
+            // Transação única - mostrar preview
+            const preview = document.createElement('div');
+            preview.className = 'transaction-preview';
+            
+            // Formatar data sem conversão de timezone (usar string direta)
+            let dataFormatada = '';
+            if (trans.date) {
+                // Se vier no formato ISO (YYYY-MM-DD), converter para DD/MM/YYYY
+                const dateParts = trans.date.split('-');
+                if (dateParts.length === 3) {
+                    dataFormatada = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                } else {
+                    dataFormatada = trans.date;
+                }
             }
+            
+            // Garantir que type existe antes de usar
+            const tipoTransacao = trans.type || 'despesa';
+            const iconeTransacao = tipoTransacao === 'despesa' ? '💸' : '💰';
+            const tipoTexto = tipoTransacao.toUpperCase();
+            
+            preview.innerHTML = `
+                <strong>${iconeTransacao} ${tipoTexto}</strong><br>
+                Valor: R$ ${trans.amount?.toFixed(2) || '?'}<br>
+                ${trans.category ? `Categoria: ${trans.category}<br>` : ''}
+                ${trans.account ? `Conta: ${trans.account}<br>` : ''}
+                ${dataFormatada ? `Data: ${dataFormatada}` : ''}
+            `;
+            bubble.appendChild(preview);
         }
-        
-        // Garantir que type existe antes de usar
-        const tipoTransacao = trans.type || 'despesa';
-        const iconeTransacao = tipoTransacao === 'despesa' ? '💸' : '💰';
-        const tipoTexto = tipoTransacao.toUpperCase();
-        
-        preview.innerHTML = `
-            <strong>${iconeTransacao} ${tipoTexto}</strong><br>
-            Valor: R$ ${trans.amount?.toFixed(2) || '?'}<br>
-            ${trans.category ? `Categoria: ${trans.category}<br>` : ''}
-            ${trans.account ? `Conta: ${trans.account}<br>` : ''}
-            ${dataFormatada ? `Data: ${dataFormatada}` : ''}
-        `;
-        bubble.appendChild(preview);
     }
     
     messageDiv.appendChild(avatar);
