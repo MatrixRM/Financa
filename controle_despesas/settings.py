@@ -24,24 +24,36 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-# Permitir acesso de dispositivos na rede local
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '[::1]',
-    '*',  # Permite qualquer host (apenas para desenvolvimento!)
-]
+# Hosts permitidos (CRÍTICO: Nunca use '*' em produção!)
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='localhost,127.0.0.1,[::1]',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
 
-# Configuração para CSRF com ngrok e túneis HTTPS
+# Se DEBUG estiver ativo, permite rede local
+if DEBUG:
+    ALLOWED_HOSTS.extend(['192.168.*.*', '10.*.*.*'])
+
+# Configuração para CSRF
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
 
-# Adicione sua URL do ngrok aqui quando usar
-# Exemplo: CSRF_TRUSTED_ORIGINS.append('https://abc123.ngrok.io')
+# Adicionar origens extras via variável de ambiente
+# Exemplo: CSRF_EXTRA_ORIGINS=https://abc.ngrok.io,https://seu-dominio.com
+extra_origins = config('CSRF_EXTRA_ORIGINS', default='')
+if extra_origins:
+    CSRF_TRUSTED_ORIGINS.extend([o.strip() for o in extra_origins.split(',') if o.strip()])
+
+# Garantir HTTPS em produção
+if not DEBUG:
+    CSRF_COOKIE_HTTPONLY = False  # Precisa ser acessível via JS para AJAX
+    CSRF_USE_SESSIONS = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 
 # Application definition
@@ -71,7 +83,36 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.RateLimitMiddleware',  # Rate limiting
 ]
+
+# Security Headers
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTPS e Cookies Seguros (apenas em produção)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 ano
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+else:
+    # Desenvolvimento: garantir que não há redirect para HTTPS
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+# Content Security Policy
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com")
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com")
+CSP_IMG_SRC = ("'self'", "data:", "https:")
+CSP_FONT_SRC = ("'self'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com")
+CSP_CONNECT_SRC = ("'self'",)
+CSP_FRAME_ANCESTORS = ("'none'",)
 
 ROOT_URLCONF = 'controle_despesas.urls'
 
@@ -236,8 +277,27 @@ LOGGING = {
         },
         'core': {
             'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
 }
+
+# Rate Limiting (usando cache)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Limites de taxa para APIs sensíveis
+RATE_LIMIT_ENABLED = not DEBUG
+RATE_LIMIT_CHAT = '20/minute'  # 20 mensagens por minuto
+RATE_LIMIT_LOGIN = '5/minute'  # 5 tentativas de login por minuto
+RATE_LIMIT_BIOMETRIC = '10/minute'  # 10 tentativas de biometria por minuto

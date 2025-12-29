@@ -916,41 +916,50 @@ def biometria_challenge_view(request):
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'error': 'Requisição inválida'}, status=400)
     
-    # Gerar challenge aleatório
+    # Gerar challenge aleatório (32 bytes = 256 bits)
     challenge = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')
     
-    # Armazenar challenge na sessão
+    # Armazenar challenge e timestamp na sessão
     request.session['webauthn_challenge'] = challenge
+    request.session['webauthn_challenge_timestamp'] = timezone.now().timestamp()
     
     # Buscar credenciais existentes (se o usuário estiver autenticado)
     allow_credentials = []
     if request.user.is_authenticated:
         from .models import CredencialBiometrica
         credenciais = CredencialBiometrica.objects.filter(usuario=request.user, ativa=True)
-        allow_credentials = [{'id': cred.credential_id} for cred in credenciais]
+        allow_credentials = [{'id': cred.credential_id, 'type': 'public-key'} for cred in credenciais]
     else:
         # Buscar todas as credenciais ativas para permitir login
         from .models import CredencialBiometrica
         credenciais = CredencialBiometrica.objects.filter(ativa=True)
-        allow_credentials = [{'id': cred.credential_id} for cred in credenciais]
+        allow_credentials = [{'id': cred.credential_id, 'type': 'public-key'} for cred in credenciais]
+    
+    logger.debug(f"Challenge gerado para {len(allow_credentials)} credenciais")
     
     return JsonResponse({
         'challenge': challenge,
         'allowCredentials': allow_credentials,
         'timeout': 60000,
-        'userVerification': 'preferred'
+        'userVerification': 'preferred',
+        'rpId': request.get_host().split(':')[0]
     })
 
 
 @require_http_methods(["POST"])
 def biometria_verify_view(request):
-    """Verifica a autenticação biométrica"""
+    """Verifica a autenticação biométrica com validação melhorada"""
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        logger.warning(f"Tentativa de acesso inválido à biometria de {request.META.get('REMOTE_ADDR')}")
         return JsonResponse({'error': 'Requisição inválida'}, status=400)
     
     try:
         data = json.loads(request.body)
         credential_id = data.get('id')
+        client_data = data.get('response', {})
+        
+        if not credential_id:
+            return JsonResponse({'success': False, 'error': 'Credencial não fornecida'})
         
         # Buscar credencial
         from .models import CredencialBiometrica
@@ -960,30 +969,67 @@ def biometria_verify_view(request):
                 ativa=True
             )
         except CredencialBiometrica.DoesNotExist:
+            logger.warning(f"Credencial não encontrada: {credential_id}")
             return JsonResponse({
                 'success': False,
                 'error': 'Credencial não encontrada'
             })
         
-        # Verificar challenge (simplificado para MVP)
+        # VALIDAÇÃO 1: Verificar challenge
         stored_challenge = request.session.get('webauthn_challenge')
         if not stored_challenge:
+            logger.warning(f"Challenge expirado para credencial {credential_id}")
             return JsonResponse({
                 'success': False,
                 'error': 'Challenge expirado ou inválido'
             })
         
-        # Atualizar último uso
+        # VALIDAÇÃO 2: Verificar timestamp do challenge (máximo 60 segundos)
+        challenge_timestamp = request.session.get('webauthn_challenge_timestamp', 0)
+        current_timestamp = timezone.now().timestamp()
+        if current_timestamp - challenge_timestamp > 60:
+            logger.warning(f"Challenge expirado por timeout: {credential_id}")
+            del request.session['webauthn_challenge']
+            return JsonResponse({
+                'success': False,
+                'error': 'Challenge expirado. Por favor, tente novamente.'
+            })
+        
+        # VALIDAÇÃO 3: Verificar sign_count (protege contra clonagem)
+        authenticator_data = client_data.get('authenticatorData', {})
+        new_sign_count = authenticator_data.get('signCount', 0)
+        
+        if new_sign_count > 0 and new_sign_count <= credencial.sign_count:
+            logger.error(f"⚠️ ALERTA DE SEGURANÇA: Sign count inválido para {credencial.usuario.username}")
+            logger.error(f"   Esperado: > {credencial.sign_count}, Recebido: {new_sign_count}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Erro de segurança. Credencial pode estar comprometida.'
+            })
+        
+        # VALIDAÇÃO 4: Verificar se o usuário não está bloqueado
+        if hasattr(credencial.usuario, 'is_active') and not credencial.usuario.is_active:
+            logger.warning(f"Tentativa de login com usuário inativo: {credencial.usuario.username}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Usuário inativo'
+            })
+        
+        # Atualizar credencial
         credencial.ultimo_uso = timezone.now()
-        credencial.sign_count += 1
+        credencial.sign_count = max(new_sign_count, credencial.sign_count + 1)
         credencial.save()
         
         # Fazer login do usuário
         login(request, credencial.usuario)
         
         # Limpar challenge da sessão
-        del request.session['webauthn_challenge']
+        if 'webauthn_challenge' in request.session:
+            del request.session['webauthn_challenge']
+        if 'webauthn_challenge_timestamp' in request.session:
+            del request.session['webauthn_challenge_timestamp']
         
+        logger.info(f"✅ Login biométrico bem-sucedido: {credencial.usuario.username}")
         messages.success(request, f'✓ Login realizado com sucesso via biometria!')
         
         return JsonResponse({
@@ -991,10 +1037,17 @@ def biometria_verify_view(request):
             'redirect': '/'
         })
         
-    except Exception as e:
+    except json.JSONDecodeError:
+        logger.error("Erro ao decodificar JSON na verificação biométrica")
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': 'Dados inválidos'
+        })
+    except Exception as e:
+        logger.exception(f"Erro na verificação biométrica: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Erro interno ao processar autenticação'
         })
 
 

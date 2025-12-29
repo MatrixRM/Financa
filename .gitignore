@@ -1,10 +1,58 @@
+# Python
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Django
 db.sqlite3
+db.sqlite3-journal
+*.log
+staticfiles/
+media/
+
+# Environment Variables (CRÍTICO - Nunca commitar!)
 .env
+.env.local
+.env.production
+.env.*.local
+*.env
+
+# Virtual Environments
 venv/
 env/
+ENV/
+.venv/
+
+# IDE
 .vscode/
-media/
-staticfiles/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Security & Sensitive Files
+debug.log
 *.log
+*.pot
+*.mo
+*.compile
+local_settings.py
+secrets.json
+
+# Backups
+*.bak
+*.backup
+*.sql
+*.dump
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
