@@ -913,7 +913,12 @@ def exportar_pdf_view(request):
 
 def biometria_challenge_view(request):
     """Gera um challenge para autenticação biométrica"""
-    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    # Aceitar requisições AJAX ou POST normais do formulário de login
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    is_post = request.method == 'POST'
+    
+    if not (is_ajax or is_post):
+        logger.warning(f"Requisição inválida ao challenge de {request.META.get('REMOTE_ADDR')}")
         return JsonResponse({'error': 'Requisição inválida'}, status=400)
     
     # Gerar challenge aleatório (32 bytes = 256 bits)

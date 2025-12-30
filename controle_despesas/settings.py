@@ -83,7 +83,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.RateLimitMiddleware',  # Rate limiting
+    # 'core.middleware.RateLimitMiddleware',  # Desabilitado temporariamente
 ]
 
 # Security Headers
@@ -229,20 +229,29 @@ OPENAI_TRANSCRIPTION_MODEL = config('OPENAI_TRANSCRIPTION_MODEL', default='whisp
 OPENAI_CHAT_MAX_HISTORY = config('OPENAI_CHAT_MAX_HISTORY', default=8, cast=int)
 
 # Email / SMTP settings
-# Use SMTP backend when EMAIL_HOST is provided; fall back to console backend in DEBUG
-DEFAULT_EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_BACKEND = config('EMAIL_BACKEND', default=DEFAULT_EMAIL_BACKEND)
+# Use console backend in DEBUG mode or if EMAIL_HOST_USER is not configured
+# This prevents email errors in production when SMTP is not set up
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+
+if DEBUG or not EMAIL_HOST_USER:
+    # Console backend: print emails to console (dev) or disable (prod without config)
+    EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+else:
+    # SMTP backend: send real emails
+    EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER if EMAIL_HOST_USER else 'noreply@localhost')
 
-# Nota: Para usar Gmail/Google Workspace com SMTP, talvez seja necessário configurar senha de app
-# ou autenticação adequada no provedor de e-mail. Não comitar credenciais no repositório.
+# Nota: Para usar Gmail/Google Workspace com SMTP:
+# 1. Configure EMAIL_HOST_USER e EMAIL_HOST_PASSWORD no arquivo .env
+# 2. Use senha de app (App Password) ao invés da senha normal
+# 3. Habilite acesso menos seguro se necessário
+# NUNCA comitar credenciais no repositório!
 
 # Logging configuration
 LOGGING = {
@@ -296,8 +305,8 @@ CACHES = {
     }
 }
 
-# Limites de taxa para APIs sensíveis
-RATE_LIMIT_ENABLED = not DEBUG
+# Limites de taxa para APIs sensíveis (DESABILITADO temporariamente para debug)
+RATE_LIMIT_ENABLED = False  # not DEBUG
 RATE_LIMIT_CHAT = '20/minute'  # 20 mensagens por minuto
 RATE_LIMIT_LOGIN = '5/minute'  # 5 tentativas de login por minuto
 RATE_LIMIT_BIOMETRIC = '10/minute'  # 10 tentativas de biometria por minuto
