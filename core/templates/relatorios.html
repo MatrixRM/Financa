@@ -79,79 +79,119 @@ document.addEventListener('DOMContentLoaded', function() {
     // Despesas por Categoria
     const ctxDespesas = document.getElementById('chartDespesasCategoria');
     {% if despesas_categoria %}
-    const despesasLabels = [{% for item in despesas_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const despesasData = [{% for item in despesas_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const despesasColors = [{% for item in despesas_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const despesasLabels = [{% for item in despesas_categoria %}'{{ item.categoria__nome|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const despesasData = [{% for item in despesas_categoria %}{{ item.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const despesasColors = [{% for item in despesas_categoria %}'{{ item.categoria__cor|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
     
-    new Chart(ctxDespesas, {
-        type: 'pie',
-        data: {
-            labels: despesasLabels,
-            datasets: [{
-                data: despesasData,
-                backgroundColor: despesasColors,
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+    console.log('Despesas - Labels:', despesasLabels);
+    console.log('Despesas - Data:', despesasData);
+    console.log('Despesas - Colors:', despesasColors);
+    
+    const hasDespesasData = despesasData.some(value => value > 0);
+    
+    if (hasDespesasData) {
+        new Chart(ctxDespesas, {
+            type: 'doughnut',
+            data: {
+                labels: despesasLabels,
+                datasets: [{
+                    data: despesasData,
+                    backgroundColor: despesasColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            padding: 10,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return label + ': R$ ' + value.toFixed(2) + ' (' + percentage + '%)';
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        ctxDespesas.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>Sem dados de despesas</p></div>';
+    }
     {% else %}
-    ctxDespesas.parentElement.innerHTML = '<div class="empty-state"><p>Sem dados de despesas</p></div>';
+    ctxDespesas.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>Sem dados de despesas</p></div>';
     {% endif %}
 
     // Receitas por Categoria
     const ctxReceitas = document.getElementById('chartReceitasCategoria');
     {% if receitas_categoria %}
-    const receitasLabels = [{% for item in receitas_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const receitasData = [{% for item in receitas_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const receitasColors = [{% for item in receitas_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const receitasLabels = [{% for item in receitas_categoria %}'{{ item.categoria__nome|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const receitasData = [{% for item in receitas_categoria %}{{ item.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const receitasColors = [{% for item in receitas_categoria %}'{{ item.categoria__cor|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
     
-    new Chart(ctxReceitas, {
-        type: 'pie',
-        data: {
-            labels: receitasLabels,
-            datasets: [{
-                data: receitasData,
-                backgroundColor: receitasColors,
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+    console.log('Receitas - Labels:', receitasLabels);
+    console.log('Receitas - Data:', receitasData);
+    console.log('Receitas - Colors:', receitasColors);
+    
+    const hasReceitasData = receitasData.some(value => value > 0);
+    
+    if (hasReceitasData) {
+        new Chart(ctxReceitas, {
+            type: 'doughnut',
+            data: {
+                labels: receitasLabels,
+                datasets: [{
+                    data: receitasData,
+                    backgroundColor: receitasColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            padding: 10,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return label + ': R$ ' + value.toFixed(2) + ' (' + percentage + '%)';
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        ctxReceitas.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>Sem dados de receitas</p></div>';
+    }
     {% else %}
-    ctxReceitas.parentElement.innerHTML = '<div class="empty-state"><p>Sem dados de receitas</p></div>';
+    ctxReceitas.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p>Sem dados de receitas</p></div>';
     {% endif %}
 
     // Evolução Mensal

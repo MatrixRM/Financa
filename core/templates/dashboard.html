@@ -181,40 +181,64 @@ document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('chartDespesasCategoria');
     
     {% if despesas_por_categoria %}
-    const labels = [{% for item in despesas_por_categoria %}'{{ item.categoria__nome }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const data = [{% for item in despesas_por_categoria %}{{ item.total }}{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const colors = [{% for item in despesas_por_categoria %}'{{ item.categoria__cor }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    // Debug: Verificar dados recebidos
+    console.log('Despesas por categoria:', {{ despesas_por_categoria|safe }});
     
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.label + ': R$ ' + context.parsed.toFixed(2);
+    const labels = [{% for item in despesas_por_categoria %}'{{ item.categoria__nome|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const data = [{% for item in despesas_por_categoria %}{{ item.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const colors = [{% for item in despesas_por_categoria %}'{{ item.cor|default:"#6c757d"|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    console.log('Labels:', labels);
+    console.log('Data:', data);
+    console.log('Colors:', colors);
+    
+    // Verificar se há dados válidos
+    const hasData = data.some(value => value > 0);
+    
+    if (hasData) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return label + ': R$ ' + value.toFixed(2) + ' (' + percentage + '%)';
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        ctx.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox empty-state-icon"></i><h3>Sem dados</h3><p>Adicione despesas para ver o gráfico</p></div>';
+    }
     {% else %}
-    ctx.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox empty-state-icon"></i><h3>Sem dados</h3><p>Adicione despesas para ver o gráfico</p></div>';
+    ctx.parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-inbox empty-state-icon"></i><h3>Sem dados</h3><p>Adicione despesas deste mês para ver o gráfico</p></div>';
     {% endif %}
 });
 </script>

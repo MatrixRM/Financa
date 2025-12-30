@@ -29,18 +29,21 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 # Hosts permitidos (CRÍTICO: Nunca use '*' em produção!)
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='localhost,127.0.0.1,[::1]',
+    default='localhost,127.0.0.1,127.1.1.0,[::1]',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 
-# Se DEBUG estiver ativo, permite rede local
+# Se DEBUG estiver ativo, permite rede local e variações de localhost
 if DEBUG:
-    ALLOWED_HOSTS.extend(['192.168.*.*', '10.*.*.*'])
+    ALLOWED_HOSTS.extend(['192.168.*.*', '10.*.*.*', '127.*.*.*'])
 
 # Configuração para CSRF
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://127.1.1.0:3000',
 ]
 
 # Adicionar origens extras via variável de ambiente

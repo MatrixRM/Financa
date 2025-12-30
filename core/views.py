@@ -216,13 +216,22 @@ def dashboard_view(request):
     contas = Conta.objects.filter(casa=casa, ativa=True)
     
     # Despesas por categoria (para gráfico)
+    # Agrupar por nome, somando valores de categorias duplicadas
+    from django.db.models import OuterRef, Subquery
+    
     despesas_por_categoria = Transacao.objects.filter(
         casa=casa,
         tipo='despesa',
         data__gte=primeiro_dia_mes,
         status='paga'
-    ).values('categoria__nome', 'categoria__cor').annotate(
-        total=Sum('valor')
+    ).values('categoria__nome').annotate(
+        total=Sum('valor'),
+        cor=Subquery(
+            Categoria.objects.filter(
+                nome=OuterRef('categoria__nome'),
+                casa=casa
+            ).values('cor')[:1]
+        )
     ).order_by('-total')[:10]
     
     context = {
@@ -727,24 +736,40 @@ def relatorios_view(request):
     hoje = timezone.now().date()
     mes_inicio = (hoje - timedelta(days=365)).replace(day=1)
     
-    # Despesas por categoria
+    # Despesas por categoria (agrupar por nome para evitar duplicatas)
+    from django.db.models import OuterRef, Subquery
+    
     despesas_categoria = Transacao.objects.filter(
         casa=casa,
         tipo='despesa',
         data__gte=mes_inicio,
         status='paga'
-    ).values('categoria__nome', 'categoria__cor').annotate(
-        total=Sum('valor')
+    ).values('categoria__nome').annotate(
+        total=Sum('valor'),
+        categoria__cor=Subquery(
+            Categoria.objects.filter(
+                nome=OuterRef('categoria__nome'),
+                casa=casa,
+                tipo='despesa'
+            ).values('cor')[:1]
+        )
     ).order_by('-total')
     
-    # Receitas por categoria
+    # Receitas por categoria (agrupar por nome para evitar duplicatas)
     receitas_categoria = Transacao.objects.filter(
         casa=casa,
         tipo='receita',
         data__gte=mes_inicio,
         status='paga'
-    ).values('categoria__nome', 'categoria__cor').annotate(
-        total=Sum('valor')
+    ).values('categoria__nome').annotate(
+        total=Sum('valor'),
+        categoria__cor=Subquery(
+            Categoria.objects.filter(
+                nome=OuterRef('categoria__nome'),
+                casa=casa,
+                tipo='receita'
+            ).values('cor')[:1]
+        )
     ).order_by('-total')
     
     # Evolução mensal (últimos 12 meses)
