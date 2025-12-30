@@ -1002,7 +1002,21 @@ def biometria_verify_view(request):
         
         # VALIDAÇÃO 3: Verificar sign_count (protege contra clonagem)
         authenticator_data = client_data.get('authenticatorData', {})
-        new_sign_count = authenticator_data.get('signCount', 0)
+        
+        # Debug: Log do tipo de dado recebido
+        logger.debug(f"authenticatorData type: {type(authenticator_data)}, value: {authenticator_data}")
+        
+        # authenticatorData pode vir como string JSON ou dict
+        if isinstance(authenticator_data, str):
+            try:
+                authenticator_data = json.loads(authenticator_data)
+                logger.debug(f"authenticatorData parseado: {authenticator_data}")
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Falha ao parsear authenticatorData: {e}")
+                authenticator_data = {}
+        
+        new_sign_count = authenticator_data.get('signCount', 0) if isinstance(authenticator_data, dict) else 0
+        logger.debug(f"sign_count extraído: {new_sign_count}")
         
         if new_sign_count > 0 and new_sign_count <= credencial.sign_count:
             logger.error(f"⚠️ ALERTA DE SEGURANÇA: Sign count inválido para {credencial.usuario.username}")
@@ -1147,14 +1161,14 @@ def biometria_settings_view(request):
 
 @login_required
 @require_http_methods(["POST"])
-def biometria_delete_view(request, credencial_id):
+def biometria_delete_view(request, credential_id):
     """Remove uma credencial biométrica"""
     from .models import CredencialBiometrica
     
     try:
         credencial = get_object_or_404(
             CredencialBiometrica,
-            id=credencial_id,
+            id=credential_id,
             usuario=request.user
         )
         
