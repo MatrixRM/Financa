@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Dashboard - {{ casa.nome }}{% endblock %}
 
@@ -181,11 +182,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('chartDespesasCategoria');
     
     {% if despesas_por_categoria %}
-    // Debug: Verificar dados recebidos
-    console.log('Despesas por categoria:', {{ despesas_por_categoria|safe }});
-    
     const labels = [{% for item in despesas_por_categoria %}'{{ item.categoria__nome|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    const data = [{% for item in despesas_por_categoria %}{{ item.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const data = [{% for item in despesas_por_categoria %}{{ item.total|unlocalize }}{% if not forloop.last %}, {% endif %}{% endfor %}];
     const colors = [{% for item in despesas_por_categoria %}'{{ item.cor|default:"#6c757d"|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
     
     console.log('Labels:', labels);

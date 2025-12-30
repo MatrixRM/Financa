@@ -234,6 +234,9 @@ def dashboard_view(request):
         )
     ).order_by('-total')[:10]
     
+    # Converter para lista para facilitar serialização no template
+    despesas_por_categoria = list(despesas_por_categoria)
+    
     context = {
         'casa': casa,
         'total_receitas': total_receitas,
